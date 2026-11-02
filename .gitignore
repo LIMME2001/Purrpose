@@ -20,3 +20,6 @@ android/capacitor-cordova-android-plugins/
 
 # Browser smoke-test screenshots
 test/e2e/shots/
+
+# Single-file build output
+dist/
