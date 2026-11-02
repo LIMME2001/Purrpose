@@ -159,6 +159,10 @@ export function planView({ state, now, ui }) {
     lo = Math.min(lo, e.s);
     hi = Math.max(hi, e.f);
   }
+  if (ui.planFull) {
+    lo = 0;
+    hi = 1440;
+  }
   lo = Math.max(0, Math.floor(lo / 60) * 60);
   hi = Math.min(1440, Math.ceil(hi / 60) * 60);
   const HH = 46;
@@ -201,6 +205,10 @@ export function planView({ state, now, ui }) {
   <div class="days" role="group" aria-label="Choose a day">${days}</div>
   <section class="card">
     <div class="row-between" style="margin-bottom:14px"><h2 style="margin:0">${dayName}</h2></div>
+    <div class="row-between plan-hours" style="margin:-6px 0 14px">
+      <span class="small muted">${ui.planFull ? 'Showing all 24 hours' : `Showing ${c.fmtMinutes(lo)}–${hi >= 1440 ? '24:00' : c.fmtMinutes(hi)}`}</span>
+      <span><button class="link" data-action="plan-full">${ui.planFull ? 'Fit to my day' : 'Show 24 h'}</button> · <button class="link" data-action="edit-hours">Set my day</button></span>
+    </div>
     ${blocks.length ? '' : `<div class="empty" style="margin-bottom:12px"><b>Nothing planned</b>Add what you intend to do this day, or copy the plan from another day.</div>`}
     <div class="tl">
       <div class="tl-head"><span></span><span>Plan</span><span>What happened</span></div>

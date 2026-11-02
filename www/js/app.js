@@ -14,6 +14,7 @@ const ui = {
   mode: 'activity',
   planDay: c.weekdayIndex(Date.now()),
   logDays: 14,
+  planFull: false,
   sheet: null,
 };
 
@@ -148,6 +149,23 @@ const actions = {
   'sheet-close': closeSheet,
   'add-activity': () => openSheet({ type: 'activity' }),
   'edit-activity': (el) => openSheet({ type: 'activity', id: el.dataset.id }),
+  'edit-hours': () => openSheet({ type: 'hours' }),
+  'plan-full': () => {
+    ui.planFull = !ui.planFull;
+    render();
+  },
+  'preset-hours': (el) => {
+    const f = root.querySelector('.sheet');
+    f.querySelector('[name=start]').value = c.fmtMinutes(Number(el.dataset.s));
+    f.querySelector('[name=end]').value = c.fmtMinutes(Number(el.dataset.e));
+  },
+  'add-habit': () => openSheet({ type: 'habit' }),
+  'edit-habit': (el) => openSheet({ type: 'habit', id: el.dataset.id }),
+  'remove-habit': (el) => {
+    store.update((s) => ({ ...s, activities: s.activities.map((a) => (a.id === el.dataset.id ? { ...a, goalMin: 0 } : a)) }));
+    closeSheet();
+    toast('Habit removed. Its history is kept.', 3000);
+  },
   'add-block': () => openSheet({ type: 'block' }),
   'edit-block': (el) => openSheet({ type: 'block', id: el.dataset.id }),
   'copy-day': () => openSheet({ type: 'copy-day', from: ui.planDay }),

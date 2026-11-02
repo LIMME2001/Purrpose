@@ -90,6 +90,27 @@ export function renderSheet(sheet, { state, now, ui }) {
       return wrap('start', 'Change start time', body, `${cancel}${save()}`);
     }
 
+    case 'hours': {
+      const s = state.settings;
+      const body = `<p class="muted small" style="margin-bottom:14px">Your day is the stretch Plan shows and Stats counts as "waking" when it works out what is unaccounted for. Longer days stretch Plan automatically, so nothing you track is ever hidden.</p>
+        <div class="two"><div class="field"><label for="f-s">Day starts</label><input id="f-s" type="time" name="start" value="${c.fmtMinutes(s.dayStart)}" required></div>
+        <div class="field"><label for="f-e">Day ends</label><input id="f-e" type="time" name="end" value="${c.fmtMinutes(s.dayEnd)}" required></div></div>
+        <div class="chips" style="margin-bottom:8px">${[['Early', 360, 1320], ['Standard', 420, 1380], ['Late', 540, 1440], ['All day', 0, 1440]].map(([n, x, y]) => `<button type="button" class="btn btn-small" data-action="preset-hours" data-s="${x}" data-e="${y}">${n}</button>`).join('')}</div>`;
+      return wrap('hours', 'Set my day', body, `${cancel}${save()}`);
+    }
+
+    case 'habit': {
+      const a = state.activities.find((x) => x.id === sheet.id);
+      const pool = state.activities.filter((x) => !x.archived && (!x.goalMin || x.id === sheet.id));
+      const body = `
+        <div class="field"><label for="f-act">Activity</label><select id="f-act" name="activity" ${a ? 'disabled' : ''}>${actOptions(a ? [a] : pool, sheet.id)}</select>
+          ${a ? `<input type="hidden" name="activity" value="${esc(a.id)}">` : ''}</div>
+        <div class="field"><label for="f-g">Daily goal in minutes</label><input id="f-g" type="number" name="goal" min="5" max="1440" step="5" inputmode="numeric" value="${a?.goalMin || 30}" required>
+          <span class="hint">Reach it every day to build a streak.</span></div>`;
+      const del = a ? `<button class="btn btn-danger" type="button" data-action="remove-habit" data-id="${esc(a.id)}" data-confirm="Tap again to remove">Remove habit</button>` : '';
+      return wrap('habit', a ? 'Edit habit' : 'Add a habit', body, `${del}${cancel}${save()}`);
+    }
+
     case 'copy-day': {
       const name = c.WEEKDAYS[sheet.from];
       const body = `<p class="muted" style="margin-bottom:14px">Copy ${name}'s blocks to these days. Blocks that already exist are skipped.</p>
@@ -139,7 +160,7 @@ export function submitSheet(sheet, form, { state, now, ui }) {
         ...s,
         activities: sheet.id ? s.activities.map((a) => (a.id === sheet.id ? { ...a, ...next } : a)) : [...s.activities, { id: c.uid(), ...next }],
       }));
-      return { close: true };
+      return { close: true, toast: `${name} saved.` };
     }
 
     case 'block': {
@@ -155,7 +176,7 @@ export function submitSheet(sheet, form, { state, now, ui }) {
         ...s,
         plan: sheet.id ? s.plan.map((b) => (b.id === sheet.id ? { ...b, ...block } : b)) : [...s.plan, { id: c.uid(), ...block }],
       }));
-      return { close: true };
+      return { close: true, toast: 'Plan block saved.' };
     }
 
     case 'entry': {
@@ -171,7 +192,7 @@ export function submitSheet(sheet, form, { state, now, ui }) {
         const entry = { id: sheet.id || c.uid(), activityId: val('activity'), start, end, pausedMs, note: val('note') };
         return { ...s, entries: sheet.id ? s.entries.map((x) => (x.id === sheet.id ? entry : x)) : [...s.entries, entry] };
       });
-      return { close: true };
+      return { close: true, toast: 'Entry saved.' };
     }
 
     case 'start': {
@@ -180,7 +201,24 @@ export function submitSheet(sheet, form, { state, now, ui }) {
       let ts = c.atMinutes(c.startOfDay(now), mins);
       if (ts > now) ts = c.addDays(ts, -1); // "23:50" typed at 00:10 means yesterday
       store.update((s) => c.setActiveStart(s, ts, now));
-      return { close: true };
+      return { close: true, toast: `Start time set to ${c.fmtHM(ts)}.` };
+    }
+
+    case 'hours': {
+      const a = c.parseTime(val('start'));
+      const b = form.end.value === '00:00' ? 1440 : c.parseTime(val('end'));
+      if (a === null || b === null || b - a < 120) return { error: 'Your day needs to be at least two hours long.' };
+      store.update((s) => ({ ...s, settings: { dayStart: a, dayEnd: b } }));
+      return { close: true, toast: `Your day is ${c.fmtMinutes(a)}–${b >= 1440 ? '24:00' : c.fmtMinutes(b)}.` };
+    }
+
+    case 'habit': {
+      const goal = Math.round(Number(val('goal')));
+      if (!(goal >= 5)) return { error: 'Pick a goal of at least 5 minutes.' };
+      const id = val('activity');
+      if (!id) return { error: 'Choose an activity.' };
+      store.update((s) => ({ ...s, activities: s.activities.map((a) => (a.id === id ? { ...a, goalMin: Math.min(goal, 1440) } : a)) }));
+      return { close: true, toast: 'Habit saved.' };
     }
 
     case 'copy-day': {
@@ -197,7 +235,7 @@ export function submitSheet(sheet, form, { state, now, ui }) {
         }
         return { ...s, plan: [...s.plan, ...added] };
       });
-      return { close: true };
+      return { close: true, toast: 'Day copied.' };
     }
 
     case 'import': {

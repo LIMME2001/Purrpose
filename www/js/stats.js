@@ -109,7 +109,7 @@ export function statsView({ state, now, ui }) {
     ui.period === 'day' && isCurrent && acc.elapsed > 0
       ? `<section class="card"><h2>Waking day so far</h2>
           <div class="meter" style="--c:var(--eye)"><i style="width:${Math.min(100, (acc.tracked / acc.elapsed) * 100).toFixed(1)}%"></i></div>
-          <p class="small muted" style="margin-top:10px">${c.fmtDur(acc.tracked)} tracked, ${c.fmtDur(acc.gap)} unaccounted (${c.fmtMinutes(state.settings.dayStart)}–${c.fmtMinutes(state.settings.dayEnd)}).</p></section>`
+          <p class="small muted" style="margin-top:10px">${c.fmtDur(acc.tracked)} tracked, ${c.fmtDur(acc.gap)} unaccounted (${c.fmtMinutes(state.settings.dayStart)}–${state.settings.dayEnd >= 1440 ? '24:00' : c.fmtMinutes(state.settings.dayEnd)}).</p></section>`
       : '';
 
   /* ---- chart */
@@ -167,12 +167,12 @@ export function statsView({ state, now, ui }) {
           const s = c.goalStreak(entries, a, now);
           const done = (todayBy.get(a.id) || 0) / c.MIN;
           return `<div class="pvr" ${cv(a.color)}>
-            <div class="head"><span>${esc(a.emoji)} ${esc(a.name)}</span><span>${s.current ? '🔥 ' + s.current + (s.current === 1 ? ' day' : ' days') : 'No streak'}</span></div>
+            <div class="head"><span>${esc(a.emoji)} ${esc(a.name)}</span><span>${s.current ? '🔥 ' + s.current + (s.current === 1 ? ' day' : ' days') : 'No streak'} · <button class="link" data-action="edit-habit" data-id="${esc(a.id)}">Edit</button></span></div>
             <div class="meter"><i style="width:${Math.min(100, (done / a.goalMin) * 100).toFixed(1)}%"></i></div>
             <div class="nums">${Math.round(done)} of ${a.goalMin} min today · best streak ${s.best} · ${s.hitDaysThisWeek} ${s.hitDaysThisWeek === 1 ? 'day' : 'days'} this week</div></div>`;
         })
         .join('')
-    : `<div class="empty">Set a daily goal on an activity (Settings, then the activity) to build a streak.</div>`;
+    : `<div class="empty"><b>No habits yet</b>A habit is a daily minimum for an activity, for example 30 minutes of Japanese. Reach it every day to build a streak.</div>`;
 
   return `
   <h1 class="page-title">Stats</h1>
@@ -182,6 +182,7 @@ export function statsView({ state, now, ui }) {
   <section class="card">
     <div class="row-between" style="margin-bottom:6px"><h2 style="margin:0">Time spent<small>${esc(label)}</small></h2>
       <div class="seg" style="padding:3px;width:178px;flex:none" role="group" aria-label="Group by">${segButtons([['activity', 'Activities'], ['group', 'Groups']], ui.mode, 'mode')}</div></div>
+    ${byGroup ? `<p class="small muted" style="margin:0 0 4px">Groups add up activities that share a Group name, like several courses under Study. Set it in an activity's settings.</p>` : ''}
     ${
       total
         ? donut(items.map((x) => ({ ms: x.ms, color: x.color })), total)
@@ -194,5 +195,6 @@ export function statsView({ state, now, ui }) {
   ${table}
   ${accCard}
   ${pvrCard}
-  <section class="card"><h2>Habits</h2>${habits}</section>`;
+  <section class="card"><h2>Habits</h2>${habits}
+    ${state.activities.some((a) => !a.archived && !a.goalMin) ? `<button class="btn btn-block" style="margin-top:12px" data-action="add-habit">${icon('plus')}Add a habit</button>` : ''}</section>`;
 }
