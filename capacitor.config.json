@@ -1,0 +1,9 @@
+{
+  "appId": "com.purrpose.app",
+  "appName": "Purrpose",
+  "webDir": "www",
+  "backgroundColor": "#0e0f14",
+  "android": {
+    "backgroundColor": "#0e0f14"
+  }
+}

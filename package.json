@@ -1,0 +1,23 @@
+{
+  "name": "purrpose",
+  "version": "0.1.0",
+  "description": "Purrpose: a sleek, cat-themed time tracker. Plan your day, track what you actually do, and see your living reality.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test \"test/*.test.js\"",
+    "test:e2e": "node test/e2e/smoke.mjs",
+    "sync": "cap sync android",
+    "android": "cap open android",
+    "build:apk": "cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

@@ -1,0 +1,35 @@
+# Purrpose CI: runs the unit tests and builds a debug APK you can download from the pipeline.
+# NOTE: written without being able to run it (the authoring environment had no access to GitLab
+# or the Android SDK). If the first pipeline fails, the log will point at the step to adjust.
+
+stages:
+  - test
+  - build
+
+unit-tests:
+  stage: test
+  image: node:22
+  script:
+    - npm ci
+    - npm test
+
+debug-apk:
+  stage: build
+  image: mingc/android-build-box:latest # JDK + Android SDK preinstalled
+  before_script:
+    - command -v node >/dev/null || (curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs)
+  script:
+    - npm ci
+    - npx cap sync android
+    - cd android && chmod +x gradlew && ./gradlew assembleDebug
+  artifacts:
+    name: purrpose-debug-apk
+    paths:
+      - android/app/build/outputs/apk/debug/app-debug.apk
+    expire_in: 30 days
+  cache:
+    key: gradle
+    paths:
+      - .gradle-cache/
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-cache"
