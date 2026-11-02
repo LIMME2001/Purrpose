@@ -43,7 +43,9 @@ npm run android    # opens Android Studio; press Run with your phone connected
 
 **Debug APK from the command line:** `npm run build:apk`, then find `android/app/build/outputs/apk/debug/app-debug.apk` and install it on your phone.
 
-**On GitLab:** `.gitlab-ci.yml` runs the tests and builds the debug APK as a pipeline artifact. Note that this pipeline was written without being able to run it, so expect to adjust it if the first run fails.
+**On GitHub:** `.github/workflows/android.yml` runs the tests and builds the debug APK on every push. Download it from the run's artifacts (Actions tab, then `purrpose-debug-apk`) and install it on your phone.
+
+**On GitLab:** `.gitlab-ci.yml` does the same as a pipeline artifact. Both pipelines were written without being able to run them, so expect to adjust one if its first run fails.
 
 After changing anything in `www/`, run `npm run sync` again before building.
 
