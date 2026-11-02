@@ -26,7 +26,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      # The Android SDK is preinstalled on GitHub's ubuntu runners, so no setup step is needed.
 
       - run: npm ci
       - run: npm test
