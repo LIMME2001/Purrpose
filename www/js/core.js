@@ -71,7 +71,77 @@ export function periodRange(period, now) {
     const from = startOfWeek(now);
     return { from, to: addDays(from, 7) };
   }
+  if (period === 'year') {
+    return { from: startOfYear(now), to: startOfNextYear(now) };
+  }
   return { from: startOfMonth(now), to: startOfNextMonth(now) };
+}
+
+export function startOfYear(ts) {
+  return new Date(new Date(ts).getFullYear(), 0, 1).getTime();
+}
+
+export function startOfNextYear(ts) {
+  return new Date(new Date(ts).getFullYear() + 1, 0, 1).getTime();
+}
+
+/** Move a stats anchor one day/week/month/year back (-1) or forward (+1). */
+export function shiftAnchor(period, anchor, dir) {
+  const d = new Date(anchor);
+  if (period === 'day') return addDays(anchor, dir);
+  if (period === 'week') return addDays(anchor, 7 * dir);
+  if (period === 'month') return new Date(d.getFullYear(), d.getMonth() + dir, 1, 12).getTime();
+  if (period === 'year') return new Date(d.getFullYear() + dir, 0, 1, 12).getTime();
+  return anchor;
+}
+
+/**
+ * The [from, to) range a stats screen shows.
+ * sel = { period: 'day'|'week'|'month'|'year'|'all'|'range', anchor, rangeFrom, rangeTo } (dates as yyyy-mm-dd)
+ */
+export function resolveRange(sel, entries, now) {
+  const today = startOfDay(now);
+  if (sel.period === 'all') {
+    const first = entries.reduce((m, e) => Math.min(m, e.start), now);
+    return { from: startOfDay(first), to: addDays(today, 1) };
+  }
+  if (sel.period === 'range') {
+    const f = parseDateTime(sel.rangeFrom, '00:00');
+    const t = parseDateTime(sel.rangeTo, '00:00');
+    if (f !== null && t !== null && t >= f) return { from: f, to: addDays(t, 1) };
+    return { from: addDays(today, -29), to: addDays(today, 1) };
+  }
+  return periodRange(sel.period, sel.anchor ?? now);
+}
+
+/** Human label for a stats range: "This week", "26 Oct – 1 Nov", "November 2026" ... */
+export function periodLabel(period, from, to, now) {
+  const fmt = (ts, o) => new Date(ts).toLocaleDateString('en-GB', o);
+  const thisYear = new Date(now).getFullYear();
+  const last = addDays(to, -1);
+  const yearIf = (ts) => (new Date(ts).getFullYear() === thisYear ? {} : { year: 'numeric' });
+  const today = startOfDay(now);
+  if (period === 'day') {
+    if (from === today) return 'Today';
+    if (from === addDays(today, -1)) return 'Yesterday';
+    return fmt(from, { weekday: 'short', day: 'numeric', month: 'short', ...yearIf(from) });
+  }
+  if (period === 'week') {
+    const cur = startOfWeek(now);
+    if (from === cur) return 'This week';
+    if (from === addDays(cur, -7)) return 'Last week';
+    return `${fmt(from, { day: 'numeric', month: 'short' })} – ${fmt(last, { day: 'numeric', month: 'short', ...yearIf(last) })}`;
+  }
+  if (period === 'month') {
+    return from === startOfMonth(now) ? 'This month' : fmt(from, { month: 'long', year: 'numeric' });
+  }
+  if (period === 'year') {
+    const y = new Date(from).getFullYear();
+    return y === thisYear ? 'This year' : String(y);
+  }
+  if (period === 'all') return 'All time';
+  const o = { day: 'numeric', month: 'short', year: 'numeric' };
+  return `${fmt(from, o)} – ${fmt(last, o)}`;
 }
 
 /* ------------------------------------------------------------- formatting */
@@ -87,6 +157,14 @@ export function fmtDur(ms) {
   if (h > 0) return `${h}h ${pad(m)}m`;
   if (m > 0) return `${m}m`;
   return `${s}s`;
+}
+
+/** Compact hours for tables: "12.5 h", "<0.1 h", "–" for nothing. */
+export function fmtHours(ms) {
+  if (ms <= 0) return '–';
+  const h = ms / HOUR;
+  if (h < 0.1) return '<0.1 h';
+  return `${h >= 100 ? Math.round(h) : h.toFixed(1)} h`;
 }
 
 /** 1:02:03 or 02:03 – for the live timer. */
@@ -220,6 +298,25 @@ export function discardActive(state) {
   return { ...state, active: null };
 }
 
+/**
+ * Archive an activity: it disappears from Start, Plan and pickers, but every entry stays in stats.
+ * A timer running on it is saved first; its plan blocks are removed.
+ */
+export function archiveActivity(state, id, now) {
+  const s = state.active && state.active.activityId === id ? stopActive(state, now) : state;
+  return {
+    ...s,
+    activities: s.activities.map((a) => (a.id === id ? { ...a, archived: true } : a)),
+    plan: s.plan.filter((b) => b.activityId !== id),
+  };
+}
+
+export function restoreActivity(state, id) {
+  return { ...state, activities: state.activities.map((a) => (a.id === id ? { ...a, archived: false } : a)) };
+}
+
+export const isArchived = (a) => !!(a && a.archived);
+
 /** Correct the start time of the running timer ("I actually started at 10:15"). */
 export function setActiveStart(state, newStart, now) {
   const a = state.active;
@@ -277,6 +374,48 @@ export function totalsByGroup(entries, activities, from, to) {
     groups.set(g, cur);
   }
   return groups;
+}
+
+/**
+ * Hours per activity for this week, this month, this year and all time (archived activities included).
+ * Returns { rows: [{ activity, week, month, year, all }], totals: { week, month, year, all } }
+ */
+export function timespanTotals(entries, activities, now) {
+  const spans = {
+    week: periodRange('week', now),
+    month: periodRange('month', now),
+    year: periodRange('year', now),
+    all: { from: -Infinity, to: Infinity },
+  };
+  const maps = Object.fromEntries(Object.entries(spans).map(([k, r]) => [k, totalsByActivity(entries, r.from, r.to)]));
+  const rows = [];
+  const totals = { week: 0, month: 0, year: 0, all: 0 };
+  for (const activity of activities) {
+    const row = { activity };
+    for (const k of Object.keys(spans)) {
+      row[k] = maps[k].get(activity.id) || 0;
+      totals[k] += row[k];
+    }
+    if (row.all > 0) rows.push(row);
+  }
+  rows.sort((a, b) => b.all - a.all);
+  return { rows, totals };
+}
+
+/** Map(monthStart -> net ms) for every month touching [from, to). */
+export function bucketByMonth(entries, from, to, pred = () => true) {
+  const map = new Map();
+  for (let m = startOfMonth(from); m < to; m = startOfNextMonth(m)) map.set(m, 0);
+  for (const e of entries) {
+    if (!pred(e) || e.end <= from || e.start >= to) continue;
+    let m = startOfMonth(Math.max(e.start, from));
+    while (m < to && m < e.end) {
+      const next = startOfNextMonth(m);
+      map.set(m, (map.get(m) || 0) + overlapMs(e, Math.max(m, from), Math.min(next, to)));
+      m = next;
+    }
+  }
+  return map;
 }
 
 /** Map(dayStart -> net ms) for every day in [from, to). `from` must be a start of day. */
@@ -431,7 +570,7 @@ export function buildInsights({ state, now }) {
     }
   }
 
-  for (const a of state.activities) {
+  for (const a of state.activities.filter((x) => !x.archived)) {
     const s = goalStreak(entries, a, now);
     if (s.current >= 2) out.push(`🔥 ${s.current}-day streak on ${a.name} (best: ${s.best}).`);
   }
@@ -457,6 +596,7 @@ export function normalizeState(raw) {
           color: str(a.color, PALETTE[0]),
           group: typeof a.group === 'string' ? a.group : '',
           goalMin: Math.max(0, num(a.goalMin, 0)),
+          archived: a.archived === true,
         }))
     : base.activities;
 

@@ -14,7 +14,9 @@ const wrap = (type, title, body, actions) => `
   </form>`;
 
 const actOptions = (acts, sel) =>
-  acts.map((a) => `<option value="${esc(a.id)}" ${a.id === sel ? 'selected' : ''}>${esc(a.emoji)} ${esc(a.name)}</option>`).join('');
+  acts
+    .filter((a) => !a.archived || a.id === sel)
+    .map((a) => `<option value="${esc(a.id)}" ${a.id === sel ? 'selected' : ''}>${esc(a.emoji)} ${esc(a.name)}</option>`).join('');
 
 const dayChips = (checked) =>
   c.WEEKDAYS.map((w, i) => `<label class="chip"><input type="checkbox" name="day" value="${i}" ${checked.includes(i) ? 'checked' : ''}><span>${w}</span></label>`).join('');
@@ -44,7 +46,15 @@ export function renderSheet(sheet, { state, now, ui }) {
       const del = a
         ? `<button class="btn btn-danger" type="button" data-action="delete-activity" data-id="${esc(a.id)}" data-confirm="${n ? `Tap again: deletes ${n} ${n === 1 ? 'entry' : 'entries'}` : 'Tap again to delete'}">Delete</button>`
         : '';
-      return wrap('activity', a ? 'Edit activity' : 'New activity', body, `${del}${cancel}${save()}`);
+      const arch = a
+        ? a.archived
+          ? `<button class="btn" type="button" data-action="restore-activity" data-id="${esc(a.id)}">Restore</button>`
+          : `<button class="btn" type="button" data-action="archive-activity" data-id="${esc(a.id)}">Archive</button>`
+        : '';
+      const archHint = a
+        ? `<p class="small muted" style="margin-top:4px">${a.archived ? 'Archived: hidden from Start and Plan, but all its stats are kept.' : 'Archive hides it from Start and Plan but keeps all its stats. Its plan blocks are removed.'}</p>`
+        : '';
+      return wrap('activity', a ? 'Edit activity' : 'New activity', body + archHint, `${del}${arch}${cancel}${save()}`);
     }
 
     case 'block': {

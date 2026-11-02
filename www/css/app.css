@@ -303,3 +303,27 @@ nav.tabs button[aria-current='page'] { color: var(--eye); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ------------------------------------------- stats: navigator, table */
+.seg.six { padding: 3px; margin-bottom: 12px; }
+.seg.six button { min-height: 36px; font-size: 13px; padding: 0 2px; min-width: 0; }
+.nav-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.nav-label { flex: 1; text-align: center; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.nav-label b { font-size: 17px; font-weight: 650; }
+.nav-label .link { font-size: 13px; }
+.nav-row .icon-btn { background: var(--surface); color: var(--text); }
+.nav-row .icon-btn:disabled { opacity: 0.3; }
+.nav-row + .two, .seg.six + .two { margin-bottom: 12px; }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--raised); border-radius: 999px; padding: 1px 7px; margin-left: 4px; vertical-align: 1px; }
+.ttable { display: flex; flex-direction: column; }
+.ttable .tr { display: grid; grid-template-columns: minmax(84px, 1.7fr) repeat(4, minmax(0, 1fr)); gap: 4px; align-items: center; padding: 9px 0; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.ttable .tr + .tr { border-top: 1px solid var(--line); }
+.ttable .th { color: var(--faint); font-size: 12px; font-weight: 600; padding-top: 0; }
+.ttable .nm { display: flex; align-items: center; gap: 8px; text-align: left; min-width: 0; }
+.ttable .nm i { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.ttable .nm b { font-weight: 600; overflow-wrap: normal; word-break: normal; }
+.ttable .nm > span { min-width: 0; }
+.row-between h2 small { display: block; margin: 2px 0 0; }
+.ttable .nm small { display: block; font-size: 11px; color: var(--faint); }
+.ttable .arch { opacity: 0.6; }
+.ttable .tot { font-weight: 650; }

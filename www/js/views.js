@@ -91,6 +91,7 @@ export function nowView({ state, now }) {
 
   const grid =
     state.activities
+      .filter((x) => !x.archived)
       .map((x) => {
         const ms = today.get(x.id) || 0;
         const on = a && a.activityId === x.id;
@@ -217,109 +218,6 @@ export function planView({ state, now, ui }) {
   </div>`;
 }
 
-/* ----------------------------------------------------------------- Stats */
-
-export function statsView({ state, now, ui }) {
-  const acts = c.activityMap(state.activities);
-  const entries = c.allEntries(state, now);
-  const { from, to } = c.periodRange(ui.period, now);
-  const byGroup = ui.mode === 'group';
-
-  let items;
-  if (byGroup) {
-    items = [...c.totalsByGroup(entries, state.activities, from, to)].map(([g, v]) => ({ key: g, name: g, emoji: '', color: v.color, ms: v.ms }));
-  } else {
-    items = [...c.totalsByActivity(entries, from, to)].map(([id, ms]) => {
-      const a = actOf(acts, id);
-      return { key: id, name: a.name, emoji: a.emoji, color: a.color, ms };
-    });
-  }
-  items.sort((x, y) => y.ms - x.ms);
-  const total = items.reduce((s, x) => s + x.ms, 0);
-
-  const keyOf = (e) => (byGroup ? c.groupOf(acts.get(e.activityId)) : e.activityId);
-
-  const todayStart = c.startOfDay(now);
-  const daysElapsed = Math.max(1, Math.round((c.startOfDay(Math.min(now, to - 1)) - from) / c.DAY) + 1);
-
-  const legend = items
-    .map(
-      (x) => `<div class="lg" ${cv(x.color)}><i></i><span>${esc(x.emoji)} ${esc(x.name)}</span><span class="val">${c.fmtDur(x.ms)}</span><span class="pct">${total ? Math.round((x.ms / total) * 100) : 0}%</span></div>`
-    )
-    .join('');
-
-  const periodWord = { day: 'today', week: 'this week', month: 'this month' }[ui.period];
-
-  let chart = '';
-  if (ui.period !== 'day') {
-    const maps = items.map((it) => ({ it, map: c.bucketByDay(entries, from, to, (e) => keyOf(e) === it.key) }));
-    const days = [];
-    for (let d = from; d < to; d = c.addDays(d, 1)) {
-      const parts = maps.map(({ it, map }) => ({ color: it.color, ms: map.get(d) || 0 }));
-      days.push({ start: d, parts, total: parts.reduce((s, p) => s + p.ms, 0) });
-    }
-    chart = `<section class="card"><h2>Per day</h2>${stackedBars(days, { todayStart, month: ui.period === 'month' })}</section>`;
-  }
-
-  const insights = c.buildInsights({ state, now });
-
-  const acc = c.accountedToday(entries, state.settings, now);
-  const accCard =
-    ui.period === 'day' && acc.elapsed > 0
-      ? `<section class="card"><h2>Waking day so far</h2>
-          <div class="meter" style="--c:var(--eye)"><i style="width:${Math.min(100, (acc.tracked / acc.elapsed) * 100).toFixed(1)}%"></i></div>
-          <p class="small muted" style="margin-top:10px">${c.fmtDur(acc.tracked)} tracked, ${c.fmtDur(acc.gap)} unaccounted (${c.fmtMinutes(state.settings.dayStart)}–${c.fmtMinutes(state.settings.dayEnd)}).</p></section>`
-      : '';
-
-  const rows = c.adherence(state.plan, entries, from, to, now);
-  const pvr = rows.length
-    ? rows
-        .map((r) => {
-          const a = actOf(acts, r.activityId);
-          const pct = r.pct === null ? 0 : r.pct;
-          return `<div class="pvr" ${cv(a.color)}>
-            <div class="head"><span>${esc(a.emoji)} ${esc(a.name)}</span><span>${Math.round(pct * 100)}%</span></div>
-            <div class="meter"><i style="width:${Math.min(100, pct * 100).toFixed(1)}%"></i></div>
-            <div class="nums">${c.fmtDur(r.actual)} done of ${c.fmtDur(r.planned)} planned so far</div></div>`;
-        })
-        .join('')
-    : `<div class="empty">${state.plan.length ? 'Nothing planned has happened yet in this period.' : 'Add blocks in Plan to see how your reality compares.'}</div>`;
-
-  const dayAll = c.periodRange('day', now);
-  const todayBy = c.totalsByActivity(entries, dayAll.from, dayAll.to);
-  const habitActs = state.activities.filter((a) => a.goalMin > 0);
-  const habits = habitActs.length
-    ? habitActs
-        .map((a) => {
-          const s = c.goalStreak(entries, a, now);
-          const done = (todayBy.get(a.id) || 0) / c.MIN;
-          return `<div class="pvr" ${cv(a.color)}>
-            <div class="head"><span>${esc(a.emoji)} ${esc(a.name)}</span><span>${s.current ? '🔥 ' + s.current + (s.current === 1 ? ' day' : ' days') : 'No streak'}</span></div>
-            <div class="meter"><i style="width:${Math.min(100, (done / a.goalMin) * 100).toFixed(1)}%"></i></div>
-            <div class="nums">${Math.round(done)} of ${a.goalMin} min today · best streak ${s.best} · ${s.hitDaysThisWeek} ${s.hitDaysThisWeek === 1 ? 'day' : 'days'} this week</div></div>`;
-        })
-        .join('')
-    : `<div class="empty">Set a daily goal on an activity (Settings, then the activity) to build a streak.</div>`;
-
-  const seg = (id, label, cur, action) => `<button data-action="${action}" data-v="${id}" aria-pressed="${cur === id}">${label}</button>`;
-
-  return `
-  <h1 class="page-title">Stats</h1>
-  <div class="seg" role="group" aria-label="Period">${seg('day', 'Day', ui.period, 'period')}${seg('week', 'Week', ui.period, 'period')}${seg('month', 'Month', ui.period, 'period')}</div>
-  ${insights.length ? `<section class="card">${insights.map((t) => `<div class="insight">${esc(t)}</div>`).join('')}</section>` : ''}
-  <section class="card">
-    <div class="row-between" style="margin-bottom:6px"><h2 style="margin:0">Time ${periodWord}</h2>
-      <div class="seg" style="padding:3px;width:178px" role="group" aria-label="Group by">${seg('activity', 'Activities', ui.mode, 'mode')}${seg('group', 'Groups', ui.mode, 'mode')}</div></div>
-    ${total ? donut(items.map((x) => ({ ms: x.ms, color: x.color })), total) : `<div class="empty" style="margin-top:10px"><b>No time tracked ${periodWord}</b>Start an activity on the Now tab and it will show up here.</div>`}
-    ${ui.period !== 'day' && total ? `<p class="small muted" style="text-align:center;margin-top:4px">${c.fmtDur(total / daysElapsed)} per day on average</p>` : ''}
-    <div class="legend">${legend}</div>
-  </section>
-  ${chart}
-  ${accCard}
-  <section class="card"><h2>Plan vs reality<small>${periodWord}</small></h2>${pvr}</section>
-  <section class="card"><h2>Habits</h2>${habits}</section>`;
-}
-
 /* ------------------------------------------------------------------- Log */
 
 export function logView({ state, now, ui }) {
@@ -363,8 +261,20 @@ export function logView({ state, now, ui }) {
 
 /* -------------------------------------------------------------- Settings */
 
-export function settingsView({ state }) {
+export function settingsView({ state, now }) {
+  const entries = c.allEntries(state, now);
+  const allTime = c.totalsByActivity(entries, -Infinity, Infinity);
+  const archivedRows = state.activities
+    .filter((a) => a.archived)
+    .map(
+      (a) => `<button class="li" ${cv(a.color)} data-action="edit-activity" data-id="${esc(a.id)}">
+        <span class="bar"></span>
+        <span><div class="t">${esc(a.emoji)} ${esc(a.name)}</div><div class="s">${c.fmtHours(allTime.get(a.id) || 0)} tracked in total</div></span>
+        <span class="faint">Restore</span></button>`
+    )
+    .join('');
   const rows = state.activities
+    .filter((a) => !a.archived)
     .map(
       (a) => `<button class="li" ${cv(a.color)} data-action="edit-activity" data-id="${esc(a.id)}">
         <span class="bar"></span>
@@ -378,6 +288,7 @@ export function settingsView({ state }) {
   <h1 class="page-title">Settings</h1>
   <section class="card"><h2>Activities</h2><div class="list">${rows || '<div class="empty">No activities yet.</div>'}</div>
     <button class="btn btn-block" style="margin-top:12px" data-action="add-activity">${icon('plus')}New activity</button></section>
+  ${archivedRows ? `<section class="card"><h2>Archived<small>stats are kept</small></h2><div class="list">${archivedRows}</div></section>` : ''}
   <form class="card" data-form="window">
     <h2>Waking day</h2>
     <p class="small muted" style="margin-bottom:12px">Purrpose uses this window to estimate how much of your day is unaccounted for.</p>

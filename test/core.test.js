@@ -235,4 +235,115 @@ test('normalizeState repairs or rejects imported data', () => {
   assert.deepEqual(s.plan[0].days, [0]);
   assert.equal(s.active.pausedAt, null);
   assert.deepEqual(s.settings, { dayStart: 420, dayEnd: 1380 });
+  assert.equal(s.activities[0].archived, false);
+  assert.equal(c.normalizeState({ activities: [{ id: 'a', name: 'A', archived: true }] }).activities[0].archived, true);
+});
+
+/* ------------------------------------------- timespans, navigation, archive */
+
+const NOW = t([2026, 11, 18], '15:00'); // Wednesday
+const ent = (act, day, hm, mins) => ({ id: `${act}${day}${hm}`, activityId: act, start: t(day, hm), end: t(day, hm) + mins * c.MIN, pausedMs: 0 });
+
+test('year range and stepping through periods', () => {
+  assert.deepEqual(c.periodRange('year', NOW), { from: t([2026, 1, 1]), to: t([2027, 1, 1]) });
+  assert.equal(c.startOfDay(c.shiftAnchor('day', NOW, -1)), t([2026, 11, 17]));
+  assert.equal(c.startOfWeek(c.shiftAnchor('week', NOW, -1)), t([2026, 11, 9]));
+  assert.equal(c.shiftAnchor('month', t([2026, 1, 31], '10:00'), -1) >= t([2025, 12, 1]), true);
+  assert.deepEqual(c.periodRange('month', c.shiftAnchor('month', t([2026, 1, 31], '10:00'), -1)), { from: t([2025, 12, 1]), to: t([2026, 1, 1]) });
+  assert.deepEqual(c.periodRange('month', c.shiftAnchor('month', t([2026, 3, 31], '10:00'), +1)), { from: t([2026, 4, 1]), to: t([2026, 5, 1]) });
+  assert.deepEqual(c.periodRange('year', c.shiftAnchor('year', NOW, -1)), { from: t([2025, 1, 1]), to: t([2026, 1, 1]) });
+});
+
+test('resolveRange handles anchors, all time and custom ranges', () => {
+  const entries = [ent('study', [2025, 12, 12], '09:00', 60)];
+  assert.deepEqual(c.resolveRange({ period: 'week', anchor: null }, entries, NOW), c.periodRange('week', NOW));
+  assert.deepEqual(c.resolveRange({ period: 'all' }, entries, NOW), { from: t([2025, 12, 12]), to: t([2026, 11, 19]) });
+  // all time with nothing tracked still gives a valid one-day range
+  assert.deepEqual(c.resolveRange({ period: 'all' }, [], NOW), { from: t([2026, 11, 18]), to: t([2026, 11, 19]) });
+  // custom range is inclusive of the last day
+  assert.deepEqual(c.resolveRange({ period: 'range', rangeFrom: '2026-11-01', rangeTo: '2026-11-03' }, [], NOW), { from: t([2026, 11, 1]), to: t([2026, 11, 4]) });
+  // reversed or empty dates fall back to the last 30 days
+  const fb = c.resolveRange({ period: 'range', rangeFrom: '2026-11-10', rangeTo: '2026-11-01' }, [], NOW);
+  assert.equal(fb.to, t([2026, 11, 19]));
+  assert.equal(fb.from, t([2026, 10, 20]));
+});
+
+test('period labels read naturally', () => {
+  const r = (p, anchor) => { const x = c.periodRange(p, anchor); return c.periodLabel(p, x.from, x.to, NOW); };
+  assert.equal(r('day', NOW), 'Today');
+  assert.equal(r('day', c.shiftAnchor('day', NOW, -1)), 'Yesterday');
+  assert.equal(r('week', NOW), 'This week');
+  assert.equal(r('week', c.shiftAnchor('week', NOW, -1)), 'Last week');
+  assert.equal(r('month', NOW), 'This month');
+  assert.equal(r('month', c.shiftAnchor('month', NOW, -2)), 'September 2026');
+  assert.equal(r('year', NOW), 'This year');
+  assert.equal(r('year', c.shiftAnchor('year', NOW, -1)), '2025');
+  assert.equal(c.periodLabel('all', 0, 1, NOW), 'All time');
+  assert.match(r('week', c.shiftAnchor('week', NOW, -3)), /26 Oct – 1 Nov/);
+});
+
+test('timespanTotals: hours per activity for week, month, year and all time', () => {
+  const s = c.defaultState();
+  const entries = [
+    ent('study', [2026, 11, 17], '09:00', 60), // this week
+    ent('study', [2026, 11, 3], '09:00', 120), // this month, not this week
+    ent('study', [2026, 3, 10], '09:00', 180), // this year, not this month
+    ent('study', [2025, 12, 12], '09:00', 240), // before this year
+    ent('walking', [2026, 11, 18], '08:00', 30),
+  ];
+  const { rows, totals } = c.timespanTotals(entries, s.activities, NOW);
+  const study = rows.find((r) => r.activity.id === 'study');
+  assert.deepEqual([study.week, study.month, study.year, study.all].map((ms) => ms / c.HOUR), [1, 3, 6, 10]);
+  assert.equal(rows.length, 2); // activities with no time are left out
+  assert.equal(rows[0].activity.id, 'study'); // sorted by all-time total
+  assert.equal(totals.all, 10.5 * c.HOUR);
+  assert.equal(totals.week, 1.5 * c.HOUR);
+});
+
+test('bucketByMonth splits an entry that crosses a month boundary', () => {
+  const e = { id: 'x', activityId: 'study', start: t([2026, 10, 31], '23:00'), end: t([2026, 11, 1], '02:00'), pausedMs: 0 };
+  const map = c.bucketByMonth([e], t([2026, 10, 1]), t([2026, 12, 1]));
+  assert.equal(map.get(t([2026, 10, 1])), c.HOUR);
+  assert.equal(map.get(t([2026, 11, 1])), 2 * c.HOUR);
+  assert.equal(map.size, 2);
+});
+
+test('archiving keeps all history, removes plan blocks and saves a running timer', () => {
+  let s = c.defaultState();
+  s = { ...s, entries: [ent('walking', [2026, 11, 17], '08:00', 45)], plan: [{ id: 'p', activityId: 'walking', days: [0], start: 480, end: 540 }, { id: 'q', activityId: 'study', days: [0], start: 600, end: 660 }] };
+  s = c.startActivity(s, 'walking', t([2026, 11, 18], '14:00'));
+  s = c.archiveActivity(s, 'walking', NOW);
+  assert.equal(s.active, null);
+  assert.equal(s.entries.length, 2); // the running timer was saved
+  assert.equal(s.activities.find((a) => a.id === 'walking').archived, true);
+  assert.deepEqual(s.plan.map((b) => b.id), ['q']);
+  // stats still count the archived activity
+  const { rows } = c.timespanTotals(s.entries, s.activities, NOW);
+  assert.ok(rows.some((r) => r.activity.id === 'walking' && r.all >= 45 * c.MIN));
+  // restoring brings it back (plan blocks are not restored)
+  s = c.restoreActivity(s, 'walking');
+  assert.equal(s.activities.find((a) => a.id === 'walking').archived, false);
+  assert.equal(s.plan.length, 1);
+});
+
+test('archiving a different activity leaves a running timer alone', () => {
+  let s = c.startActivity(c.defaultState(), 'study', NOW - 10 * c.MIN);
+  s = c.archiveActivity(s, 'workout', NOW);
+  assert.equal(s.active.activityId, 'study');
+});
+
+test('archived activities do not produce streak insights', () => {
+  const base = c.defaultState();
+  const days = [15, 16, 17, 18].map((d) => ent('walking', [2026, 11, d], '08:00', 40));
+  const live = c.buildInsights({ state: { ...base, entries: days }, now: NOW });
+  assert.ok(live.some((x) => x.includes('streak on Walking')));
+  const gone = c.buildInsights({ state: c.archiveActivity({ ...base, entries: days }, 'walking', NOW), now: NOW });
+  assert.ok(!gone.some((x) => x.includes('streak on Walking')));
+});
+
+test('fmtHours is compact and honest about tiny amounts', () => {
+  assert.equal(c.fmtHours(0), '–');
+  assert.equal(c.fmtHours(2 * c.MIN), '<0.1 h');
+  assert.equal(c.fmtHours(90 * c.MIN), '1.5 h');
+  assert.equal(c.fmtHours(123.4 * c.HOUR), '123 h');
 });

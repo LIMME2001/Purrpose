@@ -151,6 +151,60 @@ check('Stats: group mode merges Walking+Workout into Movement', legend.some((t) 
 await page.click('[data-action=period][data-v=month]');
 check('Stats month renders', await page.isVisible('.chart svg'));
 
+// ---- Timespans: navigate, year / all / range, hours table
+await page.click('[data-action=period][data-v=week]');
+const wk0 = await page.textContent('.nav-label b');
+check('Stats week: label says This week', wk0 === 'This week', wk0);
+check('Stats week: next is disabled on the current week', await page.isDisabled('[data-action=stats-next]'));
+await page.click('[data-action=stats-prev]');
+const wk1 = await page.textContent('.nav-label b');
+check('Stats week: stepping back changes the label', wk1 === 'Last week', wk1);
+check('Stats week: Back to now link appears', await page.isVisible('[data-action=stats-now]'));
+await page.screenshot({ path: `${SHOTS}/07b-stats-prev-week.png`, fullPage: true });
+await page.click('[data-action=stats-now]');
+check('Stats week: back to now', (await page.textContent('.nav-label b')) === 'This week');
+await page.click('[data-action=period][data-v=year]');
+check('Stats year: renders chart per month', (await page.textContent('.chart').then(() => page.textContent('.card:has(.chart) h2'))) === 'Per month');
+await page.screenshot({ path: `${SHOTS}/07c-stats-year.png`, fullPage: true });
+await page.click('[data-action=period][data-v=all]');
+check('Stats all: labelled All time', (await page.textContent('.nav-label b')) === 'All time');
+await page.click('[data-action=period][data-v=range]');
+check('Stats range: date inputs shown', (await page.locator('[data-range]').count()) === 2);
+await page.screenshot({ path: `${SHOTS}/07d-stats-range.png`, fullPage: true });
+const table = await page.locator('.ttable .tr').allTextContents();
+check('Stats: hours table lists activities and a total', table.length >= 4 && table.some((t) => t.includes('Walking')) && table[table.length - 1].startsWith('Total'), table.length + ' rows');
+await page.click('[data-action=period][data-v=day]');
+
+// ---- Archive Walking: gone from Now and Plan picker, still in stats
+await page.click('nav [data-v=now]');
+await page.click('[data-action=settings]');
+await page.click('[data-action=edit-activity][data-id=walking]');
+await page.click('[data-action=archive-activity]');
+await page.waitForSelector('.sheet', { state: 'detached' });
+await page.click('[data-action=tab][data-v=now]');
+check('Archive: Walking leaves the Start grid', (await page.locator('.act[data-id=walking]').count()) === 0);
+await page.click('nav [data-v=plan]');
+await page.click('[data-action=add-block]');
+const planOpts = await page.locator('.sheet #f-act option').allTextContents();
+check('Archive: Walking not offered in Plan', !planOpts.some((t) => t.includes('Walking')), planOpts.join(','));
+await page.click('.sheet [data-action=sheet-close]');
+await page.click('nav [data-v=stats]');
+await page.click('[data-action=period][data-v=week]');
+await page.click('[data-action=mode][data-v=activity]');
+const lg = await page.locator('.legend .lg').allTextContents();
+check('Archive: Walking still in stats, marked archived', lg.some((t) => t.includes('Walking') && t.includes('archived')), lg.join(' | '));
+const trows = await page.locator('.ttable .tr.arch').allTextContents();
+check('Archive: archived row in hours table', trows.some((t) => t.includes('Walking')));
+await page.screenshot({ path: `${SHOTS}/07e-stats-archived.png`, fullPage: true });
+await page.click('nav [data-v=now]').catch(() => {});
+await page.click('[data-action=settings]');
+check('Archive: listed under Archived in Settings', (await page.textContent('body')).includes('Archived'));
+await page.click('[data-action=edit-activity][data-id=walking]');
+await page.click('[data-action=restore-activity]');
+await page.waitForSelector('.sheet', { state: 'detached' });
+await page.click('[data-action=tab][data-v=now]');
+check('Restore: Walking back on the Start grid', (await page.locator('.act[data-id=walking]').count()) === 1);
+
 // ---- Log
 await page.click('nav [data-v=log]');
 await page.waitForSelector('.card .li');

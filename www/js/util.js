@@ -21,6 +21,7 @@ const ICONS = {
   play: filled('<path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2z"/>'),
   stop: filled('<rect x="6" y="6" width="12" height="12" rx="3"/>'),
   back: svg('<path d="M15 5l-7 7 7 7"/>'),
+  next: svg('<path d="M9 5l7 7-7 7"/>'),
 };
 
 export const icon = (name) => ICONS[name] || '';

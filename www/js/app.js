@@ -1,12 +1,16 @@
 import * as c from './core.js';
 import * as store from './store.js';
 import { esc, toast, hideToast } from './util.js';
-import { header, nav, nowView, planView, statsView, logView, settingsView, timerHTML } from './views.js';
+import { header, nav, nowView, planView, logView, settingsView, timerHTML } from './views.js';
+import { statsView } from './stats.js';
 import { renderSheet, submitSheet } from './sheets.js';
 
 const ui = {
   tab: 'now', // now | plan | stats | log | settings
   period: 'day',
+  anchor: null, // null = now; otherwise a timestamp inside the viewed day/week/month/year
+  rangeFrom: c.fmtDateInput(Date.now() - 29 * c.DAY),
+  rangeTo: c.fmtDateInput(Date.now()),
   mode: 'activity',
   planDay: c.weekdayIndex(Date.now()),
   logDays: 14,
@@ -66,6 +70,19 @@ const actions = {
   settings: () => go('settings'),
   period: (el) => {
     ui.period = el.dataset.v;
+    ui.anchor = null;
+    render();
+  },
+  'stats-prev': () => {
+    ui.anchor = c.shiftAnchor(ui.period, ui.anchor ?? Date.now(), -1);
+    render();
+  },
+  'stats-next': () => {
+    ui.anchor = c.shiftAnchor(ui.period, ui.anchor ?? Date.now(), 1);
+    render();
+  },
+  'stats-now': () => {
+    ui.anchor = null;
     render();
   },
   mode: (el) => {
@@ -155,6 +172,20 @@ const actions = {
     }));
     closeSheet();
   },
+  'archive-activity': (el) => {
+    const id = el.dataset.id;
+    const name = nameOf(id);
+    const before = store.get();
+    store.set(c.archiveActivity(before, id, Date.now()));
+    undoSnapshot = before;
+    closeSheet();
+    toast(`<span>${esc(name)} archived. Its stats are kept.</span><button class="link" data-action="undo">Undo</button>`, 6000);
+  },
+  'restore-activity': (el) => {
+    store.set(c.restoreActivity(store.get(), el.dataset.id));
+    closeSheet();
+    toast(`${esc(nameOf(el.dataset.id))} is back.`, 3000);
+  },
   'delete-block': (el) => {
     store.update((s) => ({ ...s, plan: s.plan.filter((b) => b.id !== el.dataset.id) }));
     closeSheet();
@@ -222,6 +253,13 @@ document.addEventListener('click', (e) => {
 
 // Read a chosen backup file into the paste box.
 document.addEventListener('change', async (e) => {
+  const r = e.target.dataset?.range;
+  if (r && e.target.value) {
+    if (r === 'from') ui.rangeFrom = e.target.value;
+    else ui.rangeTo = e.target.value;
+    render();
+    return;
+  }
   if (e.target.dataset?.action === 'file-picked' && e.target.files?.[0]) {
     const text = await e.target.files[0].text();
     const ta = root.querySelector('.sheet [name=json]');

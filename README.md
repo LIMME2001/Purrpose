@@ -8,7 +8,8 @@ Tracking has a cat face: it sleeps when nothing is running, opens its eyes (in t
 
 - **Track on the go.** Tap an activity to start from now. Pause, resume or stop. Starting another activity stops the previous one, and every stop or switch has an undo. Forgot to start? Change the start time ("15 min ago").
 - **Plan your week.** Build a weekly schedule of blocks (activity, days, start, end), copy a day to other days, and see your plan side by side with what actually happened, with a live "now" line.
-- **See your reality.** Stats per day, week and month: time per activity or per group (for example several courses under *Study*), a per-day chart, plan vs reality, the unaccounted part of your waking day, and plain-language insights.
+- **Archive, don't lose.** Archive activities you no longer do: they leave Start and Plan but all their history stays in the stats. Restore them any time from Settings.
+- **See your reality.** Stats per day, week, month, year, all time or a custom date range, with back/forward stepping through past periods: time per activity or per group (for example several courses under *Study*), a per-day or per-month chart, an hours-per-activity table (this week / month / year / all time), plan vs reality, the unaccounted part of your waking day, and plain-language insights.
 - **Build habits.** Give an activity a daily goal (for example Japanese 30 min) to get streaks.
 - **Your data stays on the phone.** Everything is stored locally. Export and import a JSON backup from Settings.
 
@@ -69,7 +70,8 @@ www/                 the app (no build step)
   css/app.css        design tokens and styles
   js/core.js         pure logic: timer, aggregation, plan, streaks, insights (unit-tested)
   js/store.js        localStorage persistence, backup import/export
-  js/views.js        Now, Plan, Stats, Log and Settings screens
+  js/views.js        Now, Plan, Log and Settings screens
+  js/stats.js        Stats screen (timespans, hours table)
   js/sheets.js       bottom-sheet editors (activity, block, entry, ...)
   js/cat.js          the cat and logo
   js/charts.js       donut and stacked-bar charts (inline SVG)
