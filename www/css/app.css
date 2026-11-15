@@ -366,4 +366,3 @@ nav.tabs button[aria-current='page'] { color: var(--eye); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .cat .spark { transform-box: fill-box; transform-origin: center; animation: twinkle 2.2s ease-in-out infinite; }
 @keyframes twinkle { 0%, 100% { opacity: .15; transform: scale(.6); } 50% { opacity: 1; transform: scale(1.1); } }
-.cat.has-glow { overflow: visible; }

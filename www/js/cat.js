@@ -3,7 +3,7 @@
 //   awake  – tracking (the iris takes the activity's color, pupils are slits)
 //   paused – half-lidded
 //   happy  – every habit due today is done (eyes curved into smiles, rosy cheeks)
-// Extras: 'bonus round' (the same face with wider eyes, a slowly turning burst and sparkles) while you work on a habit
+// Extras: today’s goal met (the same face with wider eyes, a slowly turning burst and sparkles) while you work on a habit
 // you already met today, and a moon at night.
 
 const HEAD_FILL = '#1f2230';
@@ -44,14 +44,14 @@ function burstRays(color) {
     const a = (i / n) * Math.PI * 2;
     const w = 0.055;
     const p = (ang, r) => `${(160 + Math.cos(ang) * r).toFixed(1)} ${(104 + Math.sin(ang) * r).toFixed(1)}`;
-    out += `<path d="M 160 104 L ${p(a - w, 240)} L ${p(a + w, 240)} Z"/>`;
+    out += `<path d="M 160 104 L ${p(a - w, 175)} L ${p(a + w, 175)} Z"/>`;
   }
-  return `<defs><radialGradient id="rayfade" gradientUnits="userSpaceOnUse" cx="160" cy="104" r="240"><stop offset=".35" stop-color="${color}" stop-opacity=".34"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><g class="burst" fill="url(#rayfade)">${out}</g>`;
+  return `<defs><radialGradient id="rayfade" gradientUnits="userSpaceOnUse" cx="160" cy="104" r="92" gradientTransform="translate(160 104) scale(1.8 1) translate(-160 -104)"><stop offset=".5" stop-color="${color}" stop-opacity=".34"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><g class="burst" fill="url(#rayfade)">${out}</g>`;
 }
 
-/** mode: 'sleep' | 'awake' | 'paused' | 'happy'; color: iris colour while awake; glow: bonus round; night: moon. */
+/** mode: 'sleep' | 'awake' | 'paused' | 'happy'; color: iris colour while awake; glow: today’s goal already met; night: moon. */
 export function catHead({ mode = 'sleep', color = '#ffc247', glow = false, night = false } = {}) {
-  const desc = { sleep: 'asleep', paused: 'resting', happy: 'purring happily', awake: glow ? 'wide-eyed, in a bonus round' : 'watching you work' }[mode] || 'asleep';
+  const desc = { sleep: 'asleep', paused: 'resting', happy: 'purring happily', awake: glow ? 'wide-eyed, today’s goal already met' : 'watching you work' }[mode] || 'asleep';
   return `
 <svg class="cat ${glow ? 'has-glow' : ''}" data-mode="${mode}" viewBox="0 0 320 196" role="img" aria-label="Purrpose cat, ${desc}">
   ${glow ? burstRays(color) : ''}

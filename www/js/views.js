@@ -98,7 +98,7 @@ export function nowView({ state, now, ui = {} }) {
           <div class="two"><button class="btn btn-primary" data-action="export">Back up now</button><button class="btn" data-action="backup-later">Later</button></div></section>`
       : '';
 
-  const status = mode === 'happy' ? 'Purring: every habit done today' : !a ? 'Napping' : a.pausedAt ? 'Taking a break' : mood.glow ? 'Bonus round: goal already met' : 'Purring along';
+  const status = mode === 'happy' ? 'Purring: every habit done today' : !a ? 'Napping' : a.pausedAt ? 'Taking a break' : mood.glow ? 'Today’s goal already met' : 'Purring along';
 
   // a milestone just crossed
   const miles = c.milestoneProgress(entries, state.activities);
