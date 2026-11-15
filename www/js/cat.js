@@ -3,7 +3,7 @@
 //   awake  – tracking (the iris takes the activity's color, pupils are slits)
 //   paused – half-lidded
 //   happy  – every habit due today is done (eyes curved into smiles, rosy cheeks)
-// Extras: today’s goal met (the same face with wider eyes, a slowly turning burst and sparkles) while you work on a habit
+// Extras: today’s goal met (the same face with wider eyes and sparkles) while you work on a habit
 // you already met today, and a moon at night.
 
 const HEAD_FILL = '#1f2230';
@@ -36,25 +36,11 @@ function eye(cx, cy, rot, color, id, fill, ink) {
 
 const star = (x, y, r) => `M ${x} ${y - r} Q ${x} ${y} ${x + r} ${y} Q ${x} ${y} ${x} ${y + r} Q ${x} ${y} ${x - r} ${y} Q ${x} ${y} ${x} ${y - r} Z`;
 
-/** Thin wedges fanning out from the middle of the head, like manga speed lines. */
-function burstRays(color) {
-  const n = 16;
-  let out = '';
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const w = 0.055;
-    const p = (ang, r) => `${(160 + Math.cos(ang) * r).toFixed(1)} ${(104 + Math.sin(ang) * r).toFixed(1)}`;
-    out += `<path d="M 160 104 L ${p(a - w, 175)} L ${p(a + w, 175)} Z"/>`;
-  }
-  return `<defs><radialGradient id="rayfade" gradientUnits="userSpaceOnUse" cx="160" cy="104" r="92" gradientTransform="translate(160 104) scale(1.8 1) translate(-160 -104)"><stop offset=".5" stop-color="${color}" stop-opacity=".34"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><g class="burst" fill="url(#rayfade)">${out}</g>`;
-}
-
 /** mode: 'sleep' | 'awake' | 'paused' | 'happy'; color: iris colour while awake; glow: today’s goal already met; night: moon. */
 export function catHead({ mode = 'sleep', color = '#ffc247', glow = false, night = false } = {}) {
   const desc = { sleep: 'asleep', paused: 'resting', happy: 'purring happily', awake: glow ? 'wide-eyed, today’s goal already met' : 'watching you work' }[mode] || 'asleep';
   return `
 <svg class="cat ${glow ? 'has-glow' : ''}" data-mode="${mode}" viewBox="0 0 320 196" role="img" aria-label="Purrpose cat, ${desc}">
-  ${glow ? burstRays(color) : ''}
   <path d="M 38 98 C 33 62 41 32 52 8 L 113 42 C 145 33 175 33 207 42 L 268 8 C 279 32 287 62 282 98 C 278 152 230 188 160 188 C 90 188 42 152 38 98 Z" fill="${HEAD_FILL}"/>
   <path d="M 60 30 L 59 56 L 88 45 Z" fill="${PINK}" opacity=".22"/>
   <path d="M 260 30 L 261 56 L 232 45 Z" fill="${PINK}" opacity=".22"/>

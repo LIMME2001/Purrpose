@@ -359,10 +359,8 @@ nav.tabs button[aria-current='page'] { color: var(--eye); }
 .mbar { height: 8px; border-radius: 4px; background: var(--raised-2); overflow: hidden; margin-top: 6px; }
 .mbar i { display: block; height: 100%; background: var(--c); border-radius: 4px; }
 
-.cat .burst, .cat .spark { display: none; }
-.cat.has-glow[data-mode='awake'] .burst, .cat.has-glow[data-mode='awake'] .spark { display: inline; }
+.cat .spark { display: none; }
+.cat.has-glow[data-mode='awake'] .spark { display: inline; }
 .cat.has-glow[data-mode='awake'] .eye-open { transform: scale(1.22); transform-box: fill-box; transform-origin: center; }
-.cat .burst { transform-box: view-box; transform-origin: 160px 104px; animation: spin 40s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .cat .spark { transform-box: fill-box; transform-origin: center; animation: twinkle 2.2s ease-in-out infinite; }
 @keyframes twinkle { 0%, 100% { opacity: .15; transform: scale(.6); } 50% { opacity: 1; transform: scale(1.1); } }
