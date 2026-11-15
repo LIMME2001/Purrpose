@@ -228,7 +228,7 @@ export function defaultState() {
     entries: [],
     plan: [],
     active: null,
-    settings: { dayStart: 7 * 60, dayEnd: 23 * 60, coat: 'midnight' },
+    settings: { dayStart: 7 * 60, dayEnd: 23 * 60 },
   };
 }
 
@@ -600,14 +600,6 @@ export function buildInsights({ state, now }) {
 /** Validate and normalise a state loaded from storage or a backup file. Returns null if unusable. */
 /* ------------------------------------------------------ the cat, history, reports */
 
-/** Fur colours for the cat. `ink` is the colour of the nose, mouth and closed eyes on that fur. */
-export const COATS = [
-  { id: 'midnight', name: 'Midnight', fill: '#1f2230', ink: '#9a9db4', ear: '#ff8fb1' },
-  { id: 'ginger', name: 'Ginger', fill: '#c9783a', ink: '#4a2a12', ear: '#ffd2b0' },
-  { id: 'smoke', name: 'Smoke', fill: '#6d7389', ink: '#23263a', ear: '#ffc4d6' },
-  { id: 'cream', name: 'Cream', fill: '#e6d7b8', ink: '#5a4a32', ear: '#ffb8c6' },
-];
-
 /**
  * The last `weeks` weeks of one habit as a grid of columns (weeks, oldest first) of 7 days (Monday first).
  * Day states: hit | miss | rest (not a habit day) | pending (today, not done yet) | future | none (before you started tracking).
@@ -711,7 +703,8 @@ export function catMood(state, entries, now) {
   return { mode: due.length > 0 && due.every(met) ? 'happy' : 'sleep', glow: false, night };
 }
 
-export const MILESTONE_HOURS = [10, 25, 50, 100, 250, 500, 1000, 2500];
+/** 10, 25, 50, 100, then every 50 to 500, every 100 to 1000, every 250 to 2500, then every 500. */
+export const MILESTONE_HOURS = [10, 25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 900, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 3000, 3500, 4000, 4500, 5000];
 
 /** All-time hours per activity with the milestone reached and the next one to aim for. */
 export function milestoneProgress(entries, activities) {
@@ -845,7 +838,6 @@ export function normalizeState(raw) {
     dayEnd: Number.isInteger(s.dayEnd) ? s.dayEnd : base.settings.dayEnd,
   };
   if (settings.dayEnd <= settings.dayStart) Object.assign(settings, { dayStart: base.settings.dayStart, dayEnd: base.settings.dayEnd });
-  settings.coat = COATS.some((x) => x.id === s.coat) ? s.coat : base.settings.coat;
 
   const lastBackupAt = Number.isFinite(raw.lastBackupAt) && raw.lastBackupAt > 0 ? raw.lastBackupAt : 0;
   return { v: 2, lastBackupAt, activities, entries, plan, active, settings };

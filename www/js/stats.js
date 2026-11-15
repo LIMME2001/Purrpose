@@ -186,8 +186,9 @@ export function statsView({ state, now, ui }) {
             <div class="head"><span>${esc(a.emoji)} ${esc(a.name)}</span><span>${s.current ? '🔥 ' + s.current + (s.current === 1 ? ' day' : ' days') : 'No streak'} · <button class="link" data-action="edit-habit" data-id="${esc(a.id)}">Edit</button></span></div>
             <div class="meter"><i style="width:${Math.min(100, (done / a.goalMin) * 100).toFixed(1)}%"></i></div>
             <div class="nums">${Math.round(done)} of ${a.goalMin} min today · best streak ${s.best} · ${s.hitDaysThisWeek} of ${s.goalDaysThisWeek} days this week</div>
-            <div class="paws" role="img" aria-label="${hist.hits} habit days reached in the last 12 weeks">${paws}</div>
-            <div class="paw-key"><span>12 weeks ago</span><span>${hist.hits} paws earned</span><span>this week</span></div></div>`;
+            <button class="link paw-toggle" data-action="toggle-paws" data-id="${esc(a.id)}" aria-expanded="${!!ui.pawsOpen[a.id]}">${ui.pawsOpen[a.id] ? 'Hide paw history' : `Paw history · ${hist.hits} paws`}</button>
+            ${ui.pawsOpen[a.id] ? `<div class="paws" role="img" aria-label="${hist.hits} habit days reached in the last 12 weeks">${paws}</div>
+            <div class="paw-key"><span>12 weeks ago</span><span>this week</span></div>` : ''}</div>`;
         })
         .join('')
     : `<div class="empty"><b>No habits yet</b>A habit is a daily minimum for an activity, for example 30 minutes of Japanese. Reach it every day to build a streak.</div>`;

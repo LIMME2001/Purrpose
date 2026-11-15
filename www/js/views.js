@@ -98,7 +98,7 @@ export function nowView({ state, now, ui = {} }) {
           <div class="two"><button class="btn btn-primary" data-action="export">Back up now</button><button class="btn" data-action="backup-later">Later</button></div></section>`
       : '';
 
-  const status = mode === 'happy' ? 'Purring: every habit done today' : !a ? 'Napping' : a.pausedAt ? 'Taking a break' : mood.glow ? 'Purring along, goal already met' : 'Purring along';
+  const status = mode === 'happy' ? 'Purring: every habit done today' : !a ? 'Napping' : a.pausedAt ? 'Taking a break' : mood.glow ? 'Bonus round: goal already met' : 'Purring along';
 
   // a milestone just crossed
   const miles = c.milestoneProgress(entries, state.activities);
@@ -159,7 +159,7 @@ export function nowView({ state, now, ui = {} }) {
   return `
   ${staleCard}
   <section class="hero">
-    <div class="hero-cat">${catHead({ mode, color: act ? act.color : '#ffc247', coat: state.settings.coat, glow: mood.glow, night: mood.night })}</div>
+    <div class="hero-cat">${catHead({ mode, color: act ? act.color : '#ffc247', glow: mood.glow, night: mood.night })}</div>
     <p class="hero-status">${status}</p>
     ${hero}
   </section>
@@ -348,8 +348,6 @@ export function settingsView({ state, now }) {
   <section class="card"><h2>Activities</h2><div class="list">${rows || '<div class="empty">No activities yet.</div>'}</div>
     <button class="btn btn-block" style="margin-top:12px" data-action="add-activity">${icon('plus')}New activity</button></section>
   ${archivedRows ? `<section class="card"><h2>Archived<small>stats are kept</small></h2><div class="list">${archivedRows}</div></section>` : ''}
-  <section class="card"><h2>Your cat</h2>
-    <div class="coats" role="group" aria-label="Fur colour">${c.COATS.map((k) => `<button class="coat" data-action="set-coat" data-id="${k.id}" aria-pressed="${(state.settings.coat || 'midnight') === k.id}"><span class="dot" style="background:${k.fill}"></span>${k.name}</button>`).join('')}</div></section>
   <form class="card" data-form="window">
     <h2>Waking day</h2>
     <p class="small muted" style="margin-bottom:12px">Purrpose uses this window to estimate how much of your day is unaccounted for.</p>

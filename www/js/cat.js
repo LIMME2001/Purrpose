@@ -3,8 +3,12 @@
 //   awake  – tracking (the iris takes the activity's color, pupils are slits)
 //   paused – half-lidded
 //   happy  – every habit due today is done (eyes curved into smiles, rosy cheeks)
-// Extras: a coat (fur colour), a golden glow while you work on a habit you already met, a moon at night.
-import { COATS } from './core.js';
+// Extras: 'bonus round' (wide eyes, a Cheshire grin, a slowly turning burst and sparkles) while you work on a habit
+// you already met today, and a moon at night.
+
+const HEAD_FILL = '#1f2230';
+const MUTED = '#9a9db4';
+const PINK = '#ff8fb1';
 
 const ALMOND = 'M -33 0 Q 0 -31 33 0 Q 0 31 -33 0 Z';
 function eye(cx, cy, rot, color, id, fill, ink) {
@@ -25,34 +29,54 @@ function eye(cx, cy, rot, color, id, fill, ink) {
       <path d="M -40 -34 L 40 -34 L 40 1 Q 0 11 -40 1 Z" fill="${fill}" clip-path="url(#${id})"/>
       <path d="M -33 0 Q 0 10 33 0" stroke="${ink}" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".55"/>
     </g>
+    <g class="eye-wide">
+      <circle r="29" fill="${color}"/>
+      <g class="wide-pupil"><circle r="19" fill="#0a0a0f"/><circle cx="-6" cy="-8" r="5.5" fill="#fff" opacity=".95"/><circle cx="7" cy="7" r="2.6" fill="#fff" opacity=".7"/></g>
+    </g>
     <path class="eye-sleep" d="M -27 -1 Q 0 15 27 -1" stroke="${ink}" stroke-width="4.4" stroke-linecap="round" fill="none"/>
     <path class="eye-happy" d="M -27 6 Q 0 -22 27 6" stroke="${ink}" stroke-width="5" stroke-linecap="round" fill="none"/>
   </g>`;
 }
 
-/** mode: 'sleep' | 'awake' | 'paused' | 'happy'; color: iris colour while awake; coat: id from COATS. */
-export function catHead({ mode = 'sleep', color = '#ffc247', coat = 'midnight', glow = false, night = false } = {}) {
-  const k = COATS.find((x) => x.id === coat) || COATS[0];
-  const desc = { sleep: 'asleep', paused: 'resting', happy: 'purring happily', awake: 'watching you work' }[mode] || 'asleep';
+const star = (x, y, r) => `M ${x} ${y - r} Q ${x} ${y} ${x + r} ${y} Q ${x} ${y} ${x} ${y + r} Q ${x} ${y} ${x - r} ${y} Q ${x} ${y} ${x} ${y - r} Z`;
+
+/** Thin wedges fanning out from the middle of the head, like manga speed lines. */
+function burstRays(color) {
+  const n = 16;
+  let out = '';
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const w = 0.055;
+    const p = (ang, r) => `${(160 + Math.cos(ang) * r).toFixed(1)} ${(104 + Math.sin(ang) * r).toFixed(1)}`;
+    out += `<path d="M 160 104 L ${p(a - w, 240)} L ${p(a + w, 240)} Z"/>`;
+  }
+  return `<defs><radialGradient id="rayfade" gradientUnits="userSpaceOnUse" cx="160" cy="104" r="240"><stop offset=".35" stop-color="${color}" stop-opacity=".34"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><g class="burst" fill="url(#rayfade)">${out}</g>`;
+}
+
+/** mode: 'sleep' | 'awake' | 'paused' | 'happy'; color: iris colour while awake; glow: bonus round; night: moon. */
+export function catHead({ mode = 'sleep', color = '#ffc247', glow = false, night = false } = {}) {
+  const desc = { sleep: 'asleep', paused: 'resting', happy: 'purring happily', awake: glow ? 'grinning, in a bonus round' : 'watching you work' }[mode] || 'asleep';
   return `
 <svg class="cat ${glow ? 'has-glow' : ''}" data-mode="${mode}" viewBox="0 0 320 196" role="img" aria-label="Purrpose cat, ${desc}">
-  ${glow ? '<ellipse class="halo" cx="160" cy="104" rx="150" ry="100" fill="#ffc247" opacity=".16"/>' : ''}
-  <path d="M 38 98 C 33 62 41 32 52 8 L 113 42 C 145 33 175 33 207 42 L 268 8 C 279 32 287 62 282 98 C 278 152 230 188 160 188 C 90 188 42 152 38 98 Z" fill="${k.fill}"/>
-  <path d="M 60 30 L 59 56 L 88 45 Z" fill="${k.ear}" opacity=".3"/>
-  <path d="M 260 30 L 261 56 L 232 45 Z" fill="${k.ear}" opacity=".3"/>
-  ${eye(110, 100, -9, color, 'lidL', k.fill, k.ink)}
-  ${eye(210, 100, 9, color, 'lidR', k.fill, k.ink)}
-  <g class="cheeks" fill="#ff8fb1" opacity=".38"><ellipse cx="82" cy="134" rx="17" ry="9"/><ellipse cx="238" cy="134" rx="17" ry="9"/></g>
-  <path d="M 150 133 L 170 133 L 160 145 Z" fill="#ff8fb1" opacity=".85" stroke="#ff8fb1" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M 160 146 L 160 153 M 160 153 Q 151 163 142 156 M 160 153 Q 169 163 178 156" stroke="${k.ink}" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".7"/>
-  <g class="whisk" stroke="${k.ink}" stroke-width="2" stroke-linecap="round" opacity=".5">
+  ${glow ? burstRays(color) : ''}
+  <path d="M 38 98 C 33 62 41 32 52 8 L 113 42 C 145 33 175 33 207 42 L 268 8 C 279 32 287 62 282 98 C 278 152 230 188 160 188 C 90 188 42 152 38 98 Z" fill="${HEAD_FILL}"/>
+  <path d="M 60 30 L 59 56 L 88 45 Z" fill="${PINK}" opacity=".22"/>
+  <path d="M 260 30 L 261 56 L 232 45 Z" fill="${PINK}" opacity=".22"/>
+  ${eye(110, 100, -9, color, 'lidL', HEAD_FILL, MUTED)}
+  ${eye(210, 100, 9, color, 'lidR', HEAD_FILL, MUTED)}
+  <g class="cheeks" fill="${PINK}" opacity=".38"><ellipse cx="82" cy="134" rx="17" ry="9"/><ellipse cx="238" cy="134" rx="17" ry="9"/></g>
+  <path d="M 150 133 L 170 133 L 160 145 Z" fill="${PINK}" opacity=".85" stroke="${PINK}" stroke-width="3" stroke-linejoin="round"/>
+  <path class="mouth" d="M 160 146 L 160 153 M 160 153 Q 151 163 142 156 M 160 153 Q 169 163 178 156" stroke="${MUTED}" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".7"/>
+  <g class="grin"><path d="M 112 150 Q 160 200 208 150 Q 160 166 112 150 Z" fill="#0a0a0f" stroke="${MUTED}" stroke-width="2" stroke-linejoin="round" opacity=".95"/><path d="M 126 156 L 132 171 L 139 160 Z M 194 156 L 188 171 L 181 160 Z" fill="#fff" opacity=".9"/></g>
+  <g class="whisk" stroke="${MUTED}" stroke-width="2" stroke-linecap="round" opacity=".5">
     <path d="M 84 136 L 12 124"/><path d="M 82 148 L 8 150"/><path d="M 86 160 L 22 176"/>
     <path d="M 236 136 L 308 124"/><path d="M 238 148 L 312 150"/><path d="M 234 160 L 298 176"/>
   </g>
-  <g class="eye-sleep" fill="${k.ink}" font-weight="700" font-family="Bricolage Grotesque, sans-serif">
+  <g class="eye-sleep" fill="${MUTED}" font-weight="700" font-family="Bricolage Grotesque, sans-serif">
     <text class="zzz" x="268" y="52" font-size="22">z</text>
     <text class="zzz" x="286" y="34" font-size="16" style="animation-delay:.5s">z</text>
   </g>
+  ${glow ? `<g fill="${color}"><path class="spark" d="${star(26, 112, 11)}"/><path class="spark" d="${star(298, 100, 9)}" style="animation-delay:.7s"/><path class="spark" d="${star(300, 26, 7)}" style="animation-delay:1.3s"/><path class="spark" d="${star(18, 34, 6)}" style="animation-delay:1.8s"/></g>` : ''}
   ${night ? '<g class="moon"><path d="M 20 44 A 20 20 0 1 0 44 70 A 15 15 0 1 1 20 44 Z" fill="#dfe3f5" opacity=".9"/><circle cx="14" cy="24" r="2" fill="#dfe3f5"/><circle cx="34" cy="16" r="1.6" fill="#dfe3f5"/></g>' : ''}
 </svg>`;
 }

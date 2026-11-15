@@ -16,6 +16,7 @@ const ui = {
   logDays: 14,
   planFull: false,
   sheet: null,
+  pawsOpen: {}, // habit id -> paw-print history expanded
 };
 
 const SNOOZE_KEY = 'purrpose.backupSnooze';
@@ -290,7 +291,10 @@ const actions = {
     saveSeen();
     render();
   },
-  'set-coat': (el) => store.update((s) => ({ ...s, settings: { ...s.settings, coat: el.dataset.id } })),
+  'toggle-paws': (el) => {
+    ui.pawsOpen[el.dataset.id] = !ui.pawsOpen[el.dataset.id];
+    render();
+  },
   'backup-later': () => {
     ui.backupSnoozeUntil = Date.now() + 3 * c.DAY;
     try {

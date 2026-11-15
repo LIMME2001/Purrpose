@@ -234,7 +234,7 @@ test('normalizeState repairs or rejects imported data', () => {
   assert.equal(s.plan.length, 1);
   assert.deepEqual(s.plan[0].days, [0]);
   assert.equal(s.active.pausedAt, null);
-  assert.deepEqual(s.settings, { dayStart: 420, dayEnd: 1380, coat: 'midnight' });
+  assert.deepEqual(s.settings, { dayStart: 420, dayEnd: 1380 });
   assert.equal(s.activities[0].archived, false);
   assert.equal(c.normalizeState({ activities: [{ id: 'a', name: 'A', archived: true }] }).activities[0].archived, true);
 });
@@ -530,8 +530,11 @@ test('milestones: reached, next and only new ones are celebrated', () => {
   assert.deepEqual(c.newMilestones(rows, { study: 10 }), []);
 });
 
-test('coat is kept by normalizeState and unknown coats fall back', () => {
-  const base = c.defaultState();
-  assert.equal(c.normalizeState({ ...base, settings: { ...base.settings, coat: 'ginger' } }).settings.coat, 'ginger');
-  assert.equal(c.normalizeState({ ...base, settings: { ...base.settings, coat: 'neon' } }).settings.coat, 'midnight');
+test('milestones keep a steady pace after 100 hours', () => {
+  const s = c.defaultState();
+  const rows = c.milestoneProgress([e2('study', MON, '08:00', 60 * 120)], s.activities);
+  assert.equal(rows[0].reached, 100);
+  assert.equal(rows[0].next, 150);
+  const gaps = c.MILESTONE_HOURS.slice(4).map((h, i, a) => h - (a[i - 1] ?? 100));
+  assert.ok(gaps.every((g) => g <= 500));
 });
