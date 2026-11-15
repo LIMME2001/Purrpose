@@ -135,7 +135,7 @@ await page.check('.sheet [name=day][value="5"]');
 await page.click('.sheet button[type=submit]');
 await page.waitForSelector('.sheet', { state: 'detached' });
 await page.click('.days button:nth-child(6)');
-check('Copy day: Saturday received the blocks', (await page.locator('.tl-lane').first().locator('.tl-block').count()) >= 3);
+check('Copy day: Saturday received the blocks', (await page.locator('.tl-lane').first().locator('.tl-block').count()) >= nBlocks); // weekday-independent: Saturday has its own blocks plus the copies
 
 // ---- Stats
 await page.click('nav [data-v=stats]');

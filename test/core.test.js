@@ -347,3 +347,115 @@ test('fmtHours is compact and honest about tiny amounts', () => {
   assert.equal(c.fmtHours(90 * c.MIN), '1.5 h');
   assert.equal(c.fmtHours(123.4 * c.HOUR), '123 h');
 });
+
+/* ---------------------------------------- forgotten timers, overlaps, rest days */
+
+test('staleTimer: flags a timer left running past the end of its day', () => {
+  let s = c.startActivity(c.defaultState(), 'study', t(MON, '21:00')); // day ends 23:00
+  assert.equal(c.staleTimer(s, t(MON, '22:30')), null);
+  assert.equal(c.staleTimer(s, t(MON, '23:30')), null); // within an hour of the end is still fine
+  const r = c.staleTimer(s, t(TUE, '09:00'));
+  assert.equal(r.kind, 'running');
+  assert.equal(r.endAt, t(MON, '23:00'));
+});
+
+test('staleTimer: a long session inside the day is flagged after 6 h, with no end suggestion', () => {
+  const s = c.startActivity(c.defaultState(), 'study', t(MON, '07:30'));
+  assert.equal(c.staleTimer(s, t(MON, '13:00')), null);
+  const r = c.staleTimer(s, t(MON, '13:45'));
+  assert.equal(r.kind, 'running');
+  assert.equal(r.endAt, null); // dayEnd (23:00) has not happened yet
+});
+
+test('staleTimer: a night session that began after the day ended only goes stale after 6 h', () => {
+  const s = c.startActivity(c.defaultState(), 'study', t(MON, '23:30'));
+  assert.equal(c.staleTimer(s, t(TUE, '02:00')), null);
+  const r = c.staleTimer(s, t(TUE, '06:00'));
+  assert.equal(r.kind, 'running');
+  assert.equal(r.endAt, null);
+});
+
+test('staleTimer: a long pause suggests stopping where it was paused', () => {
+  let s = c.startActivity(c.defaultState(), 'study', t(MON, '10:00'));
+  s = c.pauseActive(s, t(MON, '11:00'));
+  assert.equal(c.staleTimer(s, t(MON, '13:00')), null);
+  const r = c.staleTimer(s, t(MON, '14:30'));
+  assert.deepEqual(r, { kind: 'paused', endAt: t(MON, '11:00') });
+  // stopping at that moment saves exactly the first hour
+  const stopped = c.stopActive(s, r.endAt);
+  assert.equal(stopped.entries.length, 1);
+  assert.equal(c.netMs(stopped.entries[0]), 60 * c.MIN);
+  assert.equal(c.staleTimer(c.defaultState(), t(MON)), null);
+});
+
+test('stopping a forgotten timer at the end of the day saves only that much', () => {
+  const s = c.startActivity(c.defaultState(), 'study', t(MON, '21:00'));
+  const r = c.staleTimer(s, t(TUE, '09:00'));
+  const stopped = c.stopActive(s, r.endAt);
+  assert.equal(c.netMs(stopped.entries[0]), 120 * c.MIN);
+});
+
+test('findOverlap: finds clashes with saved entries and the running timer, ignores touching ones', () => {
+  let s = c.defaultState();
+  s.entries = [{ id: 'a', activityId: 'study', start: t(MON, '09:00'), end: t(MON, '10:30'), pausedMs: 0, note: '' }];
+  assert.equal(c.findOverlap(s, t(MON, '10:00'), t(MON, '11:00'), null, t(MON, '12:00')).id, 'a');
+  assert.equal(c.findOverlap(s, t(MON, '10:30'), t(MON, '11:00'), null, t(MON, '12:00')), null); // touching is fine
+  assert.equal(c.findOverlap(s, t(MON, '09:30'), t(MON, '10:00'), 'a', t(MON, '12:00')), null); // editing itself
+  s = c.startActivity(s, 'walking', t(MON, '11:30'));
+  assert.equal(c.findOverlap(s, t(MON, '11:00'), t(MON, '12:00'), null, t(MON, '12:00')).live, true);
+});
+
+test('goal streak: rest days never break a streak and do not count against it', () => {
+  // weekdays only (Mon-Fri = 0-4), goal 30 min. Fri 6 Nov, Thu 5, Wed 4 done; "now" = Mon 9 Nov afternoon.
+  const act = { id: 'walking', goalMin: 30, goalDays: [0, 1, 2, 3, 4] };
+  const mk = (day) => ({ id: String(day), activityId: 'walking', start: t([2026, 11, day], '08:00'), end: t([2026, 11, day], '08:00') + 30 * c.MIN, pausedMs: 0 });
+  const entries = [mk(4), mk(5), mk(6)];
+  const s = c.goalStreak(entries, act, t([2026, 11, 9], '12:00'));
+  assert.equal(s.current, 3); // Sat 7, Sun 8 skipped, Mon 9 still in progress
+  // the same history with a goal on every day: the weekend breaks it
+  assert.equal(c.goalStreak(entries, { ...act, goalDays: [] }, t([2026, 11, 9], '12:00')).current, 0);
+  // doing it on a rest day still counts
+  assert.equal(c.goalStreak([...entries, mk(7)], act, t([2026, 11, 9], '12:00')).current, 4);
+  // this week (Mon 9): 5 goal days
+  assert.equal(c.goalStreak(entries, act, t([2026, 11, 9], '12:00')).goalDaysThisWeek, 5);
+  assert.equal(c.goalStreak(entries, { ...act, goalDays: [] }, t([2026, 11, 9], '12:00')).goalDaysThisWeek, 7);
+});
+
+test('periodComparison: compares with the previous period at the same point', () => {
+  const mk = (id, from, hm, mins) => ({ id, activityId: 'study', start: t(from, hm), end: t(from, hm) + mins * c.MIN, pausedMs: 0 });
+  // now = Wed 18 Nov 15:00. last week: Mon 9 (60), Wed 11 (120), Fri 13 (60). this week: Mon 16 (90)
+  const entries = [mk('a', [2026, 11, 9], '09:00', 60), mk('b', [2026, 11, 11], '09:00', 120), mk('c', [2026, 11, 13], '09:00', 60), mk('d', [2026, 11, 16], '09:00', 90)];
+  const now = t([2026, 11, 18], '15:00');
+  const wk = c.periodRange('week', now);
+  const r = c.periodComparison(entries, 'week', wk.from, now);
+  assert.equal(r.live, true);
+  assert.equal(r.curTotal, 90 * c.MIN);
+  assert.equal(r.prevTotal, 60 * c.MIN + 120 * c.MIN); // Fri 13 is after the same point (Wed 15:00)
+  assert.equal(r.diff, -90 * c.MIN);
+  // a finished week is compared with the whole previous week
+  const last = c.periodRange('week', t([2026, 11, 11]));
+  const done = c.periodComparison(entries, 'week', last.from, now);
+  assert.equal(done.live, false);
+  assert.equal(done.diff, 240 * c.MIN);
+  assert.equal(done.prevTotal, 0);
+});
+
+test('state keeps goalDays and lastBackupAt, and old v1 data still loads', () => {
+  const old = { v: 1, activities: [{ id: 'x', name: 'X', goalMin: 20 }], entries: [], plan: [], active: null, settings: { dayStart: 420, dayEnd: 1380 } };
+  const n = c.normalizeState(old);
+  assert.equal(n.v, 2);
+  assert.equal(n.lastBackupAt, 0);
+  assert.deepEqual(n.activities[0].goalDays, []);
+  const n2 = c.normalizeState({ ...old, lastBackupAt: 123456, activities: [{ id: 'x', name: 'X', goalMin: 20, goalDays: [0, 0, 3, 9, 'a'] }] });
+  assert.equal(n2.lastBackupAt, 123456);
+  assert.deepEqual(n2.activities[0].goalDays, [0, 3]);
+});
+
+test('the version is the same in package.json and the app (Android reads package.json directly)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const { VERSION } = await import('../www/js/version.js');
+  assert.equal(VERSION, pkg.version);
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
+  assert.match(readFileSync(new URL('../android/app/build.gradle', import.meta.url), 'utf8'), /pkgVersion[^\n]*package\.json[\s\S]*versionName pkgVersion/);
+});

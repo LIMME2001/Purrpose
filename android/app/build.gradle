@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+// One place to change the version: package.json (a unit test checks the in-app version matches).
+def pkgVersion = new groovy.json.JsonSlurper().parse(file('../../package.json')).version
+
 android {
     namespace "com.purrpose.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -8,7 +11,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        // The version comes from package.json, so there is one place to change it.
+        versionName pkgVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +20,22 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // One permanent key for every build. Without it each CI run signs with a fresh throwaway key and
+    // Android refuses to install a new build over the old one (the only way out is uninstalling = losing data).
+    signingConfigs {
+        purrpose {
+            storeFile file('purrpose.keystore')
+            storePassword 'purrpose-key'
+            keyAlias 'purrpose'
+            keyPassword 'purrpose-key'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.purrpose
+        }
         release {
+            signingConfig signingConfigs.purrpose
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
