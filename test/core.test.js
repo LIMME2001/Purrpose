@@ -234,7 +234,7 @@ test('normalizeState repairs or rejects imported data', () => {
   assert.equal(s.plan.length, 1);
   assert.deepEqual(s.plan[0].days, [0]);
   assert.equal(s.active.pausedAt, null);
-  assert.deepEqual(s.settings, { dayStart: 420, dayEnd: 1380 });
+  assert.deepEqual(s.settings, { dayStart: 420, dayEnd: 1380, coat: 'midnight' });
   assert.equal(s.activities[0].archived, false);
   assert.equal(c.normalizeState({ activities: [{ id: 'a', name: 'A', archived: true }] }).activities[0].archived, true);
 });
@@ -458,4 +458,80 @@ test('the version is the same in package.json and the app (Android reads package
   assert.equal(VERSION, pkg.version);
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.match(readFileSync(new URL('../android/app/build.gradle', import.meta.url), 'utf8'), /pkgVersion[^\n]*package\.json[\s\S]*versionName pkgVersion/);
+});
+
+/* ---------------------------------------------- cat, history, reports */
+const e2 = (activityId, day, hm, min) => ({ id: `${activityId}${day.join('')}${hm}`, activityId, start: t(day, hm), end: t(day, hm) + min * 60000, pausedMs: 0 });
+
+test('habitHistory marks hit, miss, rest, pending, future and none', () => {
+  const act = { id: 'japanese', goalMin: 30, goalDays: [0, 1, 2, 3, 4] };
+  const now = t([2026, 11, 11], '12:00'); // Wednesday
+  const entries = [e2('japanese', [2026, 11, 2], '08:00', 40), e2('japanese', [2026, 11, 3], '08:00', 10)];
+  const h = c.habitHistory(entries, act, now, 2);
+  assert.equal(h.cols.length, 2);
+  assert.equal(h.cols[0].length, 7);
+  const w = h.cols[1]; // Mon 9th .. Sun 15th
+  assert.equal(h.cols[0][0].state, 'hit'); // Mon 2nd
+  assert.equal(h.cols[0][1].state, 'miss'); // Tue 3rd, only 10 min
+  assert.equal(h.cols[0][5].state, 'rest'); // Saturday
+  assert.equal(w[0].state, 'miss'); // Mon 9th
+  assert.equal(w[2].state, 'pending'); // today
+  assert.equal(w[3].state, 'future');
+  assert.equal(h.hits, 1);
+});
+
+test('reportDue: Sunday evening and Monday morning only', () => {
+  assert.equal(c.reportDue(t(SUN, '16:59')), null);
+  assert.equal(c.reportDue(t(SUN, '17:00')), t(MON));
+  assert.equal(c.reportDue(t([2026, 11, 9], '11:00')), t(MON));
+  assert.equal(c.reportDue(t([2026, 11, 9], '12:00')), null);
+  assert.equal(c.reportDue(t(TUE, '20:00')), null);
+});
+
+test('weeklyReport summarises totals, best day and habits', () => {
+  const s = c.defaultState();
+  const entries = [e2('study', MON, '09:00', 120), e2('study', TUE, '09:00', 60), e2('japanese', MON, '20:00', 30), e2('japanese', TUE, '20:00', 30)];
+  const r = c.weeklyReport(s, entries, t(MON), t(SUN, '18:00'));
+  assert.equal(r.total, 240 * 60000);
+  assert.equal(r.top.activity.id, 'study');
+  assert.equal(r.best.day, t(MON));
+  const jp = r.habits.find((x) => x.activity.id === 'japanese');
+  assert.equal(jp.hit, 2);
+  assert.equal(jp.due, 7);
+  assert.equal(r.perfect, false);
+  const quiet = c.weeklyReport(s, [], t(MON), t(SUN, '18:00'));
+  assert.equal(quiet.total, 0);
+  assert.match(quiet.line, /quiet/i);
+});
+
+test('catMood: happy when all due habits are met, glow when running a met habit', () => {
+  const now = t(TUE, '15:00');
+  let s = c.defaultState();
+  assert.equal(c.catMood(s, [], now).mode, 'sleep');
+  const done = [e2('japanese', TUE, '08:00', 30), e2('walking', TUE, '09:00', 30)];
+  assert.equal(c.catMood(s, done, now).mode, 'happy');
+  assert.equal(c.catMood(s, done, now).night, false);
+  assert.equal(c.catMood(s, done, t(TUE, '23:30')).night, true);
+  s = c.startActivity(s, 'japanese', t(TUE, '14:00'));
+  const m = c.catMood(s, done, now);
+  assert.equal(m.mode, 'awake');
+  assert.equal(m.glow, true);
+});
+
+test('milestones: reached, next and only new ones are celebrated', () => {
+  const s = c.defaultState();
+  const entries = [e2('study', MON, '08:00', 600), e2('walking', MON, '08:00', 60)];
+  const rows = c.milestoneProgress(entries, s.activities);
+  assert.equal(rows[0].activity.id, 'study');
+  assert.equal(rows[0].reached, 10);
+  assert.equal(rows[0].next, 25);
+  assert.equal(rows[1].reached, 0);
+  assert.deepEqual(c.newMilestones(rows, {}).map((m) => m.activity.id), ['study']);
+  assert.deepEqual(c.newMilestones(rows, { study: 10 }), []);
+});
+
+test('coat is kept by normalizeState and unknown coats fall back', () => {
+  const base = c.defaultState();
+  assert.equal(c.normalizeState({ ...base, settings: { ...base.settings, coat: 'ginger' } }).settings.coat, 'ginger');
+  assert.equal(c.normalizeState({ ...base, settings: { ...base.settings, coat: 'neon' } }).settings.coat, 'midnight');
 });

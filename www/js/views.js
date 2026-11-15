@@ -49,8 +49,9 @@ export function nowView({ state, now, ui = {} }) {
   const acts = c.activityMap(state.activities);
   const a = state.active;
   const act = a ? actOf(acts, a.activityId) : null;
-  const mode = !a ? 'sleep' : a.pausedAt ? 'paused' : 'awake';
   const entries = c.allEntries(state, now);
+  const mood = c.catMood(state, entries, now);
+  const mode = mood.mode;
   const day = c.periodRange('day', now);
   const today = c.totalsByActivity(entries, day.from, day.to);
   const todayTotal = [...today.values()].reduce((x, y) => x + y, 0);
@@ -97,7 +98,26 @@ export function nowView({ state, now, ui = {} }) {
           <div class="two"><button class="btn btn-primary" data-action="export">Back up now</button><button class="btn" data-action="backup-later">Later</button></div></section>`
       : '';
 
-  const status = !a ? 'Napping' : a.pausedAt ? 'Taking a break' : 'Purring along';
+  const status = mode === 'happy' ? 'Purring: every habit done today' : !a ? 'Napping' : a.pausedAt ? 'Taking a break' : mood.glow ? 'Purring along, goal already met' : 'Purring along';
+
+  // a milestone just crossed
+  const miles = c.milestoneProgress(entries, state.activities);
+  const fresh = ui.milestonesSeen ? c.newMilestones(miles, ui.milestonesSeen)[0] : null;
+  const milestoneCard = fresh
+    ? `<section class="card milestone" ${cv(fresh.activity.color)} role="status"><div class="big">🎉</div>
+        <h2 style="margin:4px 0">${fresh.hours} hours of ${esc(fresh.activity.name)}</h2>
+        <p class="muted">${esc(fresh.activity.emoji)} That is a lot of showing up. The cat is proud.</p>
+        <button class="btn btn-primary" style="margin-top:12px" data-action="milestone-ok">Nice</button></section>`
+    : '';
+
+  // the weekly report, Sunday evening to Monday noon
+  const repWeek = c.reportDue(now);
+  const reportCard =
+    repWeek !== null && ui.reportSeen !== repWeek && c.weeklyReport(state, entries, repWeek, now).total > 0
+      ? `<section class="card nudge"><h2>${repWeek === c.startOfWeek(now) ? 'Your week is nearly done' : 'Last week in review'}</h2>
+          <p class="muted">The cat has your week ready: time, best day and how your habits went.</p>
+          <div class="two"><button class="btn btn-primary" data-action="open-report" data-week="${repWeek}">See my week</button><button class="btn" data-action="report-later" data-week="${repWeek}">Not now</button></div></section>`
+      : '';
 
   // what the plan says right now
   const { current, next } = c.planNow(state.plan, now);
@@ -139,10 +159,12 @@ export function nowView({ state, now, ui = {} }) {
   return `
   ${staleCard}
   <section class="hero">
-    <div class="hero-cat">${catHead({ mode, color: act ? act.color : '#ffc247' })}</div>
+    <div class="hero-cat">${catHead({ mode, color: act ? act.color : '#ffc247', coat: state.settings.coat, glow: mood.glow, night: mood.night })}</div>
     <p class="hero-status">${status}</p>
     ${hero}
   </section>
+  ${milestoneCard}
+  ${reportCard}
   ${backupCard}
   ${planCard}
   <section class="card"><h2>Start something</h2><div class="grid">${grid}</div></section>
@@ -326,6 +348,8 @@ export function settingsView({ state, now }) {
   <section class="card"><h2>Activities</h2><div class="list">${rows || '<div class="empty">No activities yet.</div>'}</div>
     <button class="btn btn-block" style="margin-top:12px" data-action="add-activity">${icon('plus')}New activity</button></section>
   ${archivedRows ? `<section class="card"><h2>Archived<small>stats are kept</small></h2><div class="list">${archivedRows}</div></section>` : ''}
+  <section class="card"><h2>Your cat</h2>
+    <div class="coats" role="group" aria-label="Fur colour">${c.COATS.map((k) => `<button class="coat" data-action="set-coat" data-id="${k.id}" aria-pressed="${(state.settings.coat || 'midnight') === k.id}"><span class="dot" style="background:${k.fill}"></span>${k.name}</button>`).join('')}</div></section>
   <form class="card" data-form="window">
     <h2>Waking day</h2>
     <p class="small muted" style="margin-bottom:12px">Purrpose uses this window to estimate how much of your day is unaccounted for.</p>

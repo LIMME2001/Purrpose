@@ -2,6 +2,8 @@ import * as c from './core.js';
 import { esc, icon } from './util.js';
 import { donut, stackedBars } from './charts.js';
 
+const PAW = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><ellipse cx="12" cy="16.4" rx="5.2" ry="4.3"/><ellipse cx="5.2" cy="10.6" rx="2.2" ry="2.9" transform="rotate(-18 5.2 10.6)"/><ellipse cx="9.4" cy="5.8" rx="2.2" ry="3" transform="rotate(-6 9.4 5.8)"/><ellipse cx="14.6" cy="5.8" rx="2.2" ry="3" transform="rotate(6 14.6 5.8)"/><ellipse cx="18.8" cy="10.6" rx="2.2" ry="2.9" transform="rotate(18 18.8 10.6)"/></svg>';
+
 const ghost = (id) => ({ id, name: 'Deleted activity', emoji: '❔', color: '#a0a8b8', group: '', goalMin: 0 });
 const actOf = (acts, id) => acts.get(id) || ghost(id);
 const cv = (color) => `style="--c:${esc(color)}"`;
@@ -178,10 +180,14 @@ export function statsView({ state, now, ui }) {
         .map((a) => {
           const s = c.goalStreak(entries, a, now);
           const done = (todayBy.get(a.id) || 0) / c.MIN;
+          const hist = c.habitHistory(entries, a, now, 12);
+          const paws = hist.cols.map((col) => col.map((d) => `<i class="${d.state}" title="${new Date(d.day).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}">${d.state === 'hit' || d.state === 'pending' ? PAW : ''}</i>`).join('')).join('');
           return `<div class="pvr" ${cv(a.color)}>
             <div class="head"><span>${esc(a.emoji)} ${esc(a.name)}</span><span>${s.current ? '🔥 ' + s.current + (s.current === 1 ? ' day' : ' days') : 'No streak'} · <button class="link" data-action="edit-habit" data-id="${esc(a.id)}">Edit</button></span></div>
             <div class="meter"><i style="width:${Math.min(100, (done / a.goalMin) * 100).toFixed(1)}%"></i></div>
-            <div class="nums">${Math.round(done)} of ${a.goalMin} min today · best streak ${s.best} · ${s.hitDaysThisWeek} of ${s.goalDaysThisWeek} days this week</div></div>`;
+            <div class="nums">${Math.round(done)} of ${a.goalMin} min today · best streak ${s.best} · ${s.hitDaysThisWeek} of ${s.goalDaysThisWeek} days this week</div>
+            <div class="paws" role="img" aria-label="${hist.hits} habit days reached in the last 12 weeks">${paws}</div>
+            <div class="paw-key"><span>12 weeks ago</span><span>${hist.hits} paws earned</span><span>this week</span></div></div>`;
         })
         .join('')
     : `<div class="empty"><b>No habits yet</b>A habit is a daily minimum for an activity, for example 30 minutes of Japanese. Reach it every day to build a streak.</div>`;
@@ -208,6 +214,8 @@ export function statsView({ state, now, ui }) {
   ${table}
   ${accCard}
   ${pvrCard}
+  <section class="card"><h2>Week in review</h2>
+    <div class="two"><button class="btn" data-action="open-report" data-week="${c.startOfWeek(now)}">This week</button><button class="btn" data-action="open-report" data-week="${c.addDays(c.startOfWeek(now), -7)}">Last week</button></div></section>
   <section class="card"><h2>Habits</h2>${habits}
     ${state.activities.some((a) => !a.archived && !a.goalMin) ? `<button class="btn btn-block" style="margin-top:12px" data-action="add-habit">${icon('plus')}Add a habit</button>` : ''}</section>`;
 }

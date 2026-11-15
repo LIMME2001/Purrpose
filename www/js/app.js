@@ -25,8 +25,35 @@ try {
   ui.backupSnoozeUntil = 0;
 }
 
+const SEEN_KEY = 'purrpose.seen';
+function loadSeen() {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
+function saveSeen() {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify({ milestones: ui.milestonesSeen, report: ui.reportSeen }));
+  } catch {
+    /* the card just shows again next time */
+  }
+}
+
 const root = document.getElementById('app');
 store.load();
+{
+  // Milestones already reached before this feature existed are not celebrated retroactively.
+  const seen = loadSeen();
+  ui.reportSeen = seen ? seen.report : null;
+  if (seen && seen.milestones) ui.milestonesSeen = seen.milestones;
+  else {
+    const st = store.get();
+    ui.milestonesSeen = Object.fromEntries(c.milestoneProgress(c.allEntries(st, Date.now()), st.activities).map((r) => [r.activity.id, r.reached]));
+    saveSeen();
+  }
+}
 
 const ctx = () => ({ state: store.get(), now: Date.now(), ui });
 const nameOf = (id) => store.get().activities.find((a) => a.id === id)?.name || 'activity';
@@ -251,6 +278,19 @@ const actions = {
     ui.staleUntil = Date.now() + 3 * c.HOUR;
     render();
   },
+  'milestone-ok': () => {
+    const st = store.get();
+    for (const r of c.milestoneProgress(c.allEntries(st, Date.now()), st.activities)) ui.milestonesSeen[r.activity.id] = r.reached;
+    saveSeen();
+    render();
+  },
+  'open-report': (el) => openSheet({ type: 'report', week: Number(el.dataset.week) }),
+  'report-later': (el) => {
+    ui.reportSeen = Number(el.dataset.week);
+    saveSeen();
+    render();
+  },
+  'set-coat': (el) => store.update((s) => ({ ...s, settings: { ...s.settings, coat: el.dataset.id } })),
   'backup-later': () => {
     ui.backupSnoozeUntil = Date.now() + 3 * c.DAY;
     try {
@@ -381,7 +421,7 @@ document.addEventListener('submit', (e) => {
       err.textContent = 'The end of your day must be after the start.';
       return;
     }
-    store.update((s) => ({ ...s, settings: { dayStart: start, dayEnd: end } }));
+    store.update((s) => ({ ...s, settings: { ...s.settings, dayStart: start, dayEnd: end } }));
     toast('Waking day saved.', 2500);
     return;
   }

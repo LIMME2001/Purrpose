@@ -228,7 +228,7 @@ export function defaultState() {
     entries: [],
     plan: [],
     active: null,
-    settings: { dayStart: 7 * 60, dayEnd: 23 * 60 },
+    settings: { dayStart: 7 * 60, dayEnd: 23 * 60, coat: 'midnight' },
   };
 }
 
@@ -598,6 +598,141 @@ export function buildInsights({ state, now }) {
 /* ----------------------------------------------------- import / migration */
 
 /** Validate and normalise a state loaded from storage or a backup file. Returns null if unusable. */
+/* ------------------------------------------------------ the cat, history, reports */
+
+/** Fur colours for the cat. `ink` is the colour of the nose, mouth and closed eyes on that fur. */
+export const COATS = [
+  { id: 'midnight', name: 'Midnight', fill: '#1f2230', ink: '#9a9db4', ear: '#ff8fb1' },
+  { id: 'ginger', name: 'Ginger', fill: '#c9783a', ink: '#4a2a12', ear: '#ffd2b0' },
+  { id: 'smoke', name: 'Smoke', fill: '#6d7389', ink: '#23263a', ear: '#ffc4d6' },
+  { id: 'cream', name: 'Cream', fill: '#e6d7b8', ink: '#5a4a32', ear: '#ffb8c6' },
+];
+
+/**
+ * The last `weeks` weeks of one habit as a grid of columns (weeks, oldest first) of 7 days (Monday first).
+ * Day states: hit | miss | rest (not a habit day) | pending (today, not done yet) | future | none (before you started tracking).
+ */
+export function habitHistory(entries, activity, now, weeks = 12) {
+  const today = startOfDay(now);
+  const first = addDays(startOfWeek(now), -(weeks - 1) * 7);
+  const since = entries.reduce((m, e) => Math.min(m, startOfDay(e.start)), Infinity);
+  const goal = (activity.goalMin || 0) * MIN;
+  const map = bucketByDay(entries, first, addDays(first, weeks * 7), (e) => e.activityId === activity.id);
+  let hits = 0;
+  let misses = 0;
+  const cols = [];
+  for (let w = 0; w < weeks; w++) {
+    const col = [];
+    for (let k = 0; k < 7; k++) {
+      const day = addDays(first, w * 7 + k);
+      let state;
+      if (day > today) state = 'future';
+      else if (day < since) state = 'none';
+      else if (goal > 0 && (map.get(day) || 0) >= goal) {
+        state = 'hit';
+        hits++;
+      } else if (!isGoalDay(activity, day)) state = 'rest';
+      else if (day === today) state = 'pending';
+      else {
+        state = 'miss';
+        misses++;
+      }
+      col.push({ day, state });
+    }
+    cols.push(col);
+  }
+  return { cols, hits, misses };
+}
+
+/** Which week's report should be offered right now (its Monday), or null: Sunday from 17:00, and Monday until noon. */
+export function reportDue(now) {
+  const d = new Date(now);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  const wd = weekdayIndex(now);
+  if (wd === 6 && mins >= 17 * 60) return startOfWeek(now);
+  if (wd === 0 && mins < 12 * 60) return addDays(startOfWeek(now), -7);
+  return null;
+}
+
+/** A week in review. weekStart is any timestamp in that week. */
+export function weeklyReport(state, entries, weekStart, now) {
+  const from = startOfWeek(weekStart);
+  const to = addDays(from, 7);
+  const acts = activityMap(state.activities);
+  const rows = [...totalsByActivity(entries, from, to)]
+    .map(([id, ms]) => ({ activity: acts.get(id) || { id, name: 'Deleted activity', emoji: '❔', color: '#a0a8b8' }, ms }))
+    .sort((x, y) => y.ms - x.ms);
+  const total = rows.reduce((s, r) => s + r.ms, 0);
+  const days = bucketByDay(entries, from, to, () => true);
+  let best = null;
+  for (const [day, ms] of days) if (ms > 0 && (!best || ms > best.ms)) best = { day, ms };
+  const cmp = periodComparison(entries, 'week', from, now);
+  const today = startOfDay(now);
+  const habits = state.activities
+    .filter((a) => a.goalMin > 0 && !a.archived)
+    .map((a) => {
+      const map = bucketByDay(entries, from, to, (e) => e.activityId === a.id);
+      let hit = 0;
+      let due = 0;
+      for (let k = 0; k < 7; k++) {
+        const day = addDays(from, k);
+        if (day > today) break;
+        const done = (map.get(day) || 0) >= a.goalMin * MIN;
+        if (done) hit++;
+        if (isGoalDay(a, day) || done) due++;
+      }
+      return { activity: a, hit, due };
+    })
+    .filter((h) => h.due > 0);
+  const perfect = habits.length > 0 && habits.every((h) => h.hit >= h.due);
+  let line;
+  if (!total) line = 'A quiet week. The cat napped too.';
+  else if (perfect) line = 'Every habit, every day. Purr-fect.';
+  else if (cmp.prevTotal > 0 && cmp.diff >= cmp.prevTotal * 0.1) line = 'A bigger week than the one before.';
+  else if (cmp.prevTotal > 0 && cmp.diff <= -cmp.prevTotal * 0.1) line = 'A lighter week. Rest counts too.';
+  else line = 'A steady week. That adds up.';
+  return { from, to, total, rows, top: rows[0] || null, best, cmp, habits, perfect, line, live: now < to };
+}
+
+/** What mood is the cat in? 'happy' = every habit due today is done (while nothing is running). */
+export function catMood(state, entries, now) {
+  const day = periodRange('day', now);
+  const by = totalsByActivity(entries, day.from, day.to);
+  const met = (a) => (by.get(a.id) || 0) >= a.goalMin * MIN;
+  const d = new Date(now);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  const night = mins < state.settings.dayStart || mins >= state.settings.dayEnd;
+  const a = state.active;
+  if (a) {
+    const act = state.activities.find((x) => x.id === a.activityId);
+    return { mode: a.pausedAt ? 'paused' : 'awake', glow: !!(act && act.goalMin > 0 && met(act)), night };
+  }
+  const due = state.activities.filter((x) => x.goalMin > 0 && !x.archived && isGoalDay(x, now));
+  return { mode: due.length > 0 && due.every(met) ? 'happy' : 'sleep', glow: false, night };
+}
+
+export const MILESTONE_HOURS = [10, 25, 50, 100, 250, 500, 1000, 2500];
+
+/** All-time hours per activity with the milestone reached and the next one to aim for. */
+export function milestoneProgress(entries, activities) {
+  const by = totalsByActivity(entries, -Infinity, Infinity);
+  return activities
+    .map((activity) => {
+      const hours = (by.get(activity.id) || 0) / HOUR;
+      const reached = [...MILESTONE_HOURS].reverse().find((h) => hours >= h) || 0;
+      const next = MILESTONE_HOURS.find((h) => h > hours) || null;
+      const pct = next ? (hours - reached) / (next - reached) : 1;
+      return { activity, hours, reached, next, pct };
+    })
+    .filter((r) => r.hours > 0)
+    .sort((x, y) => y.hours - x.hours);
+}
+
+/** Milestones reached since `seen` ({ activityId: highest milestone already celebrated }). */
+export function newMilestones(rows, seen) {
+  return rows.filter((r) => r.reached > (seen[r.activity.id] || 0)).map((r) => ({ activity: r.activity, hours: r.reached }));
+}
+
 /* ------------------------------------------------- forgotten timers, overlaps */
 
 /** A running timer this long (or past the end of its day) probably means "I forgot to stop". */
@@ -709,7 +844,8 @@ export function normalizeState(raw) {
     dayStart: Number.isInteger(s.dayStart) ? s.dayStart : base.settings.dayStart,
     dayEnd: Number.isInteger(s.dayEnd) ? s.dayEnd : base.settings.dayEnd,
   };
-  if (settings.dayEnd <= settings.dayStart) Object.assign(settings, base.settings);
+  if (settings.dayEnd <= settings.dayStart) Object.assign(settings, { dayStart: base.settings.dayStart, dayEnd: base.settings.dayEnd });
+  settings.coat = COATS.some((x) => x.id === s.coat) ? s.coat : base.settings.coat;
 
   const lastBackupAt = Number.isFinite(raw.lastBackupAt) && raw.lastBackupAt > 0 ? raw.lastBackupAt : 0;
   return { v: 2, lastBackupAt, activities, entries, plan, active, settings };

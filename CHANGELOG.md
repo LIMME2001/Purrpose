@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 (15 Nov 2026)
+- Paw-print history: under each habit in Stats, one paw per day you reached the goal, 12 weeks back.
+- Week in review: time, best day, where it went and habits. Offered on Now from Sunday 17:00 until Monday noon, and
+  always available in Stats.
+- The cat reacts: smiles when every habit due today is done, glows while you track a habit you already met, wears a
+  moon outside your waking day.
+- Milestone cards at 10, 25, 50, 100 ... hours of an activity (not retroactive for hours you already had).
+- Choose the cat's fur: Settings, Your cat.
+
 ## 1.1.1 (15 Nov 2026)
 - Fix: "Save or share file" and the Android Back button did nothing in the installed app, because the page called a
   Capacitor function that only exists with Capacitor's JavaScript library (this app does not load it). They now use the

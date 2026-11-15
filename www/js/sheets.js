@@ -113,6 +113,21 @@ export function renderSheet(sheet, { state, now, ui }) {
       return wrap('habit', a ? 'Edit habit' : 'Add a habit', body, `${del}${cancel}${save()}`);
     }
 
+    case 'report': {
+      const r = c.weeklyReport(state, c.allEntries(state, now), sheet.week, now);
+      const day = (ts) => new Date(ts).toLocaleDateString('en-GB', { weekday: 'long' });
+      const rows = r.rows.slice(0, 5).map((x) => `<div class="rrow" style="--c:${esc(x.activity.color)}"><span class="bar"></span><span class="grow">${esc(x.activity.emoji)} ${esc(x.activity.name)}</span><span class="v">${c.fmtDur(x.ms)}</span></div>`).join('');
+      const hab = r.habits.map((h) => `<div class="rrow" style="--c:${esc(h.activity.color)}"><span class="bar"></span><span class="grow">${esc(h.activity.emoji)} ${esc(h.activity.name)}</span><span class="v">${h.hit} of ${h.due} days ${h.hit >= h.due ? '🐾' : ''}</span></div>`).join('');
+      const cmp = r.cmp.prevTotal > 0 ? `<p class="small muted" style="text-align:center">${r.cmp.diff >= 0 ? 'Up' : 'Down'} ${c.fmtDur(Math.abs(r.cmp.diff))} on the week before.</p>` : '';
+      const body = `<div class="report-hero"><div class="small muted">${new Date(r.from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} to ${new Date(c.addDays(r.from, 6)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${r.live ? ' · so far' : ''}</div>
+        <div class="big">${r.total ? c.fmtDur(r.total) : '0 h'}</div><div class="line">${esc(r.line)}</div></div>
+        ${cmp}
+        ${r.best ? `<p class="small" style="margin:8px 0">Best day: <b>${day(r.best.day)}</b> with ${c.fmtDur(r.best.ms)}.</p>` : ''}
+        ${rows ? `<h3 class="small muted" style="margin:12px 0 2px">Where it went</h3>${rows}` : ''}
+        ${hab ? `<h3 class="small muted" style="margin:12px 0 2px">Habits</h3>${hab}` : ''}`;
+      return wrap('report', 'Week in review', body, `<button class="btn btn-primary" type="button" data-action="sheet-close">Done</button>`);
+    }
+
     case 'copy-day': {
       const name = c.WEEKDAYS[sheet.from];
       const body = `<p class="muted" style="margin-bottom:14px">Copy ${name}'s blocks to these days. Blocks that already exist are skipped.</p>
@@ -222,7 +237,7 @@ export function submitSheet(sheet, form, { state, now, ui }) {
       const a = c.parseTime(val('start'));
       const b = form.end.value === '00:00' ? 1440 : c.parseTime(val('end'));
       if (a === null || b === null || b - a < 120) return { error: 'Your day needs to be at least two hours long.' };
-      store.update((s) => ({ ...s, settings: { dayStart: a, dayEnd: b } }));
+      store.update((s) => ({ ...s, settings: { ...s.settings, dayStart: a, dayEnd: b } }));
       return { close: true, toast: `Your day is ${c.fmtMinutes(a)}–${b >= 1440 ? '24:00' : c.fmtMinutes(b)}.` };
     }
 
