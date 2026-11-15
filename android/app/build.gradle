@@ -16,8 +16,22 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // One permanent key for every build. Without it each CI run signs with a fresh throwaway key and
+    // Android refuses to install a new build over the old one (the only way out is uninstalling = losing data).
+    signingConfigs {
+        purrpose {
+            storeFile file('purrpose.keystore')
+            storePassword 'purrpose-key'
+            keyAlias 'purrpose'
+            keyPassword 'purrpose-key'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.purrpose
+        }
         release {
+            signingConfig signingConfigs.purrpose
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

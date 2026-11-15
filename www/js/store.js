@@ -38,6 +38,9 @@ export const subscribe = (fn) => {
   return () => subs.delete(fn);
 };
 
+/** Remember that a backup was just taken (hides the backup reminder). */
+export const markBackedUp = () => set({ ...state, lastBackupAt: Date.now() });
+
 export const exportJson = () => JSON.stringify({ app: 'purrpose', exportedAt: new Date().toISOString(), ...state }, null, 2);
 
 /** Returns { ok: true } or { ok: false, error } */

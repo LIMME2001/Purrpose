@@ -2,13 +2,12 @@ name: Build Android APK
 
 # Runs the unit tests and builds a debug APK on every push and pull request.
 # The APK is attached to the run as an artifact: Actions tab -> the run -> "purrpose-debug-apk".
-# Pushes to main also update the "latest" GitHub Release with purrpose.apk (Releases page, right side of the repo).
+# Releases page: "latest" = main, "previous" = what main was before, "preview" = the newest unmerged branch.
 # You can also start it by hand from the Actions tab (Run workflow).
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -50,13 +49,30 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish the APK as the latest release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      # main -> "latest" release (and the one before it is kept as "previous").
+      # any other branch -> "preview" release, so a change can be tried on the phone before it is merged.
+      - name: Publish the APK
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk purrpose.apk
-          gh release delete latest --cleanup-tag --yes || true
-          gh release create latest purrpose.apk --target "$GITHUB_SHA" --prerelease \
-            --title "Purrpose (latest build)" \
-            --notes "Debug APK built from commit ${GITHUB_SHA::7}. On your phone: download purrpose.apk, open it and allow installing from this source."
+          SHORT=${GITHUB_SHA::7}
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            mkdir prev
+            if gh release download latest -p purrpose.apk -D prev 2>/dev/null; then
+              gh release delete previous --cleanup-tag --yes || true
+              gh release create previous prev/purrpose.apk --prerelease \
+                --title "Previous version (before the latest merge)" \
+                --notes "The build that was 'latest' before the most recent push to main. Export a backup before switching."
+            fi
+            gh release delete latest --cleanup-tag --yes || true
+            gh release create latest purrpose.apk --target "$GITHUB_SHA" --prerelease \
+              --title "Purrpose (latest build)" \
+              --notes "Debug APK built from main, commit $SHORT. Download purrpose.apk, open it and allow installing from this source."
+          else
+            gh release delete preview --cleanup-tag --yes || true
+            gh release create preview purrpose.apk --target "$GITHUB_SHA" --prerelease \
+              --title "Preview: $GITHUB_REF_NAME" \
+              --notes "Test build of branch $GITHUB_REF_NAME, commit $SHORT. Not merged yet. Your normal version is the 'latest' release."
+          fi

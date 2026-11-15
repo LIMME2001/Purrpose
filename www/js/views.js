@@ -44,7 +44,7 @@ export function nav(tab) {
 
 /* ------------------------------------------------------------------- Now */
 
-export function nowView({ state, now }) {
+export function nowView({ state, now, ui = {} }) {
   const acts = c.activityMap(state.activities);
   const a = state.active;
   const act = a ? actOf(acts, a.activityId) : null;
@@ -69,6 +69,32 @@ export function nowView({ state, now }) {
        <input class="note" data-note type="text" maxlength="120" placeholder="Add a note (optional)" value="${esc(a.note || '')}" aria-label="Note">`
     : `<h1 class="hero-activity">Nothing running</h1>
        <p class="hero-meta">Tap an activity below to start from now.</p>`;
+
+  const when = (ts) => {
+    const hm = c.fmtHM(ts);
+    return c.startOfDay(ts) === c.startOfDay(now) ? hm : `${new Date(ts).toLocaleDateString('en-GB', { weekday: 'short' })} ${hm}`;
+  };
+
+  // a timer that was probably forgotten
+  const stale = a && !(ui.staleUntil > now) ? c.staleTimer(state, now) : null;
+  const staleCard = stale
+    ? `<section class="card nudge" role="alert"><h2>Still going?</h2>
+        <p class="muted">${esc(act.name)} has been ${a.pausedAt ? 'paused since' : 'running since'} ${when(a.pausedAt || a.start)} (${c.fmtDur(c.activeElapsed(a, now))} on the clock).${
+          stale.endAt ? ` Stopping at ${c.fmtHM(stale.endAt)} would save ${c.fmtDur(c.netMs(c.activeAsEntry(a, stale.endAt)))}.` : ''
+        }</p>
+        <div class="two">${stale.endAt ? `<button class="btn btn-primary" data-action="stale-stop" data-end="${stale.endAt}">Stop at ${c.fmtHM(stale.endAt)}</button>` : ''}
+        <button class="btn ${stale.endAt ? '' : 'btn-primary'}" data-action="stale-stop">Stop now</button></div>
+        <button class="link" data-action="stale-keep">Keep going</button></section>`
+    : '';
+
+  // a quiet reminder to back up (data only lives on this phone)
+  const lastBackup = state.lastBackupAt || 0;
+  const backupCard =
+    !stale && state.entries.length >= 5 && now - lastBackup > 7 * c.DAY && !(ui.backupSnoozeUntil > now)
+      ? `<section class="card nudge"><h2>Back up your data</h2>
+          <p class="muted">${lastBackup ? `Your last backup was ${Math.floor((now - lastBackup) / c.DAY)} days ago.` : 'You have not made a backup yet.'} Everything lives only on this phone.</p>
+          <div class="two"><button class="btn btn-primary" data-action="export">Back up now</button><button class="btn" data-action="backup-later">Later</button></div></section>`
+      : '';
 
   const status = !a ? 'Napping' : a.pausedAt ? 'Taking a break' : 'Purring along';
 
@@ -110,11 +136,13 @@ export function nowView({ state, now }) {
     .join('');
 
   return `
+  ${staleCard}
   <section class="hero">
     <div class="hero-cat">${catHead({ mode, color: act ? act.color : '#ffc247' })}</div>
     <p class="hero-status">${status}</p>
     ${hero}
   </section>
+  ${backupCard}
   ${planCard}
   <section class="card"><h2>Start something</h2><div class="grid">${grid}</div></section>
   <section class="card">

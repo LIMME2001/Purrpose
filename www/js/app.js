@@ -1,6 +1,6 @@
 import * as c from './core.js';
 import * as store from './store.js';
-import { esc, toast, hideToast } from './util.js';
+import { esc, toast, hideToast, isNative } from './util.js';
 import { header, nav, nowView, planView, logView, settingsView, timerHTML } from './views.js';
 import { statsView } from './stats.js';
 import { renderSheet, submitSheet } from './sheets.js';
@@ -17,6 +17,13 @@ const ui = {
   planFull: false,
   sheet: null,
 };
+
+const SNOOZE_KEY = 'purrpose.backupSnooze';
+try {
+  ui.backupSnoozeUntil = Number(localStorage.getItem(SNOOZE_KEY)) || 0;
+} catch {
+  ui.backupSnoozeUntil = 0;
+}
 
 const root = document.getElementById('app');
 store.load();
@@ -65,6 +72,10 @@ function offerUndo(message) {
 }
 
 /* ---------------------------------------------------------------- actions */
+
+/** Native Capacitor plugins, used without a bundler: the Android side registers them by name. */
+const plugins = {};
+const plugin = (name) => (plugins[name] ??= window.Capacitor.registerPlugin(name));
 
 const actions = {
   tab: (el) => go(el.dataset.v),
@@ -181,6 +192,7 @@ const actions = {
   /* destructive (two-step confirm handled in the click listener) */
   'delete-activity': (el) => {
     const id = el.dataset.id;
+    offerUndo(`${nameOf(id)} deleted`);
     store.update((s) => ({
       ...s,
       activities: s.activities.filter((a) => a.id !== id),
@@ -205,16 +217,45 @@ const actions = {
     toast(`${esc(nameOf(el.dataset.id))} is back.`, 3000);
   },
   'delete-block': (el) => {
+    offerUndo('Block deleted');
     store.update((s) => ({ ...s, plan: s.plan.filter((b) => b.id !== el.dataset.id) }));
     closeSheet();
   },
   'delete-entry': (el) => {
+    offerUndo('Entry deleted');
     store.update((s) => ({ ...s, entries: s.entries.filter((e) => e.id !== el.dataset.id) }));
     closeSheet();
   },
   erase: () => {
+    offerUndo('All data erased');
     store.resetAll();
-    toast('All data erased.', 3000);
+  },
+
+  /* a timer that was probably forgotten */
+  'stale-stop': (el) => {
+    const before = store.get();
+    if (!before.active) return;
+    const name = nameOf(before.active.activityId);
+    const endAt = Number(el.dataset.end) || Date.now();
+    const after = c.stopActive(before, Math.max(endAt, before.active.start));
+    store.set(after);
+    if (after.entries.length > before.entries.length) {
+      offerUndo(`Saved ${c.fmtDur(c.netMs(after.entries[after.entries.length - 1]))} of ${name}`);
+      undoSnapshot = before;
+    }
+  },
+  'stale-keep': () => {
+    ui.staleUntil = Date.now() + 3 * c.HOUR;
+    render();
+  },
+  'backup-later': () => {
+    ui.backupSnoozeUntil = Date.now() + 3 * c.DAY;
+    try {
+      localStorage.setItem(SNOOZE_KEY, String(ui.backupSnoozeUntil));
+    } catch {
+      /* the reminder just comes back next time */
+    }
+    render();
   },
 
   /* export helpers */
@@ -227,6 +268,7 @@ const actions = {
       ta?.select();
       document.execCommand?.('copy');
     }
+    store.markBackedUp();
     toast('Backup copied to the clipboard.', 2500);
   },
   'download-export': () => {
@@ -238,10 +280,29 @@ const actions = {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    store.markBackedUp();
   },
   'share-export': async () => {
+    const text = store.exportJson();
+    if (isNative()) {
+      // write a real .json file to the app cache and hand it to Android's share sheet (Drive, email, Files...)
+      try {
+        const name = `purrpose-backup-${c.fmtDateInput(Date.now())}.json`;
+        const { uri } = await plugin('Filesystem').writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
+        await plugin('Share').share({ title: 'Purrpose backup', dialogTitle: 'Save your backup', files: [uri] });
+        store.markBackedUp();
+        toast('Backup shared. Keep that file somewhere safe.', 4000);
+      } catch (err) {
+        if (!/cancel/i.test(String(err?.message || err))) {
+          await actions['copy-export']();
+          toast("Couldn't make a file, so the backup text was copied instead.", 4500);
+        }
+      }
+      return;
+    }
     try {
-      await navigator.share({ title: 'Purrpose backup', text: store.exportJson() });
+      await navigator.share({ title: 'Purrpose backup', text });
+      store.markBackedUp();
     } catch {
       /* user dismissed the share sheet */
     }
@@ -310,6 +371,7 @@ document.addEventListener('submit', (e) => {
     return;
   }
 
+  const before = store.get();
   const res = submitSheet(ui.sheet, form, x);
   if (res.error) {
     form.querySelector('[data-err]').textContent = res.error;
@@ -319,8 +381,24 @@ document.addEventListener('submit', (e) => {
     ui.sheet = null;
     render();
   }
-  if (res.toast) toast(res.toast, 3000);
+  if (res.undo) {
+    undoSnapshot = before;
+    toast(`<span>${esc(res.toast)}</span><button class="link" data-action="undo">Undo</button>`, 10000);
+  } else if (res.toast) toast(res.toast, 3000);
 });
+
+// Android's Back button: close a sheet first, then go back to Now, and only then leave the app.
+if (isNative()) {
+  try {
+    plugin('App').addListener('backButton', () => {
+      if (ui.sheet) closeSheet();
+      else if (ui.tab !== 'now') go('now');
+      else plugin('App').minimizeApp();
+    });
+  } catch {
+    /* without the listener Android just closes the app, as before */
+  }
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && ui.sheet) closeSheet();

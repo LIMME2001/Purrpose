@@ -44,7 +44,15 @@ npm run android    # opens Android Studio; press Run with your phone connected
 
 **Debug APK from the command line:** `npm run build:apk`, then find `android/app/build/outputs/apk/debug/app-debug.apk` and install it on your phone.
 
-**On GitHub:** `.github/workflows/android.yml` runs the tests and builds the debug APK on every push. Download it from the run's artifacts (Actions tab, then `purrpose-debug-apk`) and install it on your phone.
+**On GitHub:** `.github/workflows/android.yml` runs the tests and builds the debug APK on every push and publishes it on the Releases page:
+
+- **latest**: the newest build of `main`. This is the one to install.
+- **previous**: what `main` was before the latest push (a way back if an update misbehaves).
+- **preview**: the newest build of an unmerged branch, to try a change on the phone before merging it.
+
+**Signing and updates.** Every build is signed with the same key (`android/app/purrpose.keystore`, passwords in `android/app/build.gradle`), so a new APK installs over the old one and keeps your data. The key is committed on purpose: this is a personal sideloaded app in a private repo. If the repo is ever made public, generate a new key and keep it out of git. Builds made before this key was added were signed with a throwaway key, so moving to the first stable build needs one uninstall: export a backup first.
+
+**Backups.** In the Android app, Settings > Export backup > Save or share file writes a `.json` file and opens Android's share sheet. Purrpose reminds you on the Now screen when the last backup is more than a week old.
 
 **On GitLab:** `.gitlab-ci.yml` does the same as a pipeline artifact. Both pipelines were written without being able to run them, so expect to adjust one if its first run fails.
 

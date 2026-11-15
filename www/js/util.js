@@ -24,6 +24,9 @@ const ICONS = {
   next: svg('<path d="M9 5l7 7-7 7"/>'),
 };
 
+/** True inside the installed Android app (Capacitor), false in a browser. */
+export const isNative = () => !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.());
+
 export const icon = (name) => ICONS[name] || '';
 
 export const toast = (() => {

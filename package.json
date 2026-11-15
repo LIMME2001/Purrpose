@@ -15,7 +15,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.0.0",
+    "@capacitor/filesystem": "^7.1.9",
+    "@capacitor/share": "^7.0.4",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0"
   },
   "devDependencies": {

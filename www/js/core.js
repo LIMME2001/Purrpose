@@ -215,7 +215,8 @@ export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function defaultState() {
   return {
-    v: 1,
+    v: 2,
+    lastBackupAt: 0,
     activities: [
       { id: 'study', name: 'Study', emoji: '📚', color: '#8b9cff', group: 'Study', goalMin: 0 },
       { id: 'japanese', name: 'Japanese', emoji: '🗣️', color: '#ff8fb1', group: 'Language', goalMin: 30 },
@@ -490,8 +491,18 @@ export function adherence(plan, entries, from, to, now) {
 /* ---------------------------------------------------------------- habits */
 
 /** Current and best streak of days that reached the activity's daily goal. */
+/** Does the goal apply on this day? An empty `goalDays` means every day. */
+export function isGoalDay(activity, dayTs) {
+  const days = activity && activity.goalDays;
+  return !days || days.length === 0 || days.includes(weekdayIndex(dayTs));
+}
+
+/**
+ * Streak for an activity's daily goal. Days outside `goalDays` are rest days: they never break a streak,
+ * and doing the goal on one still counts. Today never breaks a streak while it is still in progress.
+ */
 export function goalStreak(entries, activity, now) {
-  if (!activity || !activity.goalMin) return { current: 0, best: 0, hitDaysThisWeek: 0 };
+  if (!activity || !activity.goalMin) return { current: 0, best: 0, hitDaysThisWeek: 0, goalDaysThisWeek: 0 };
   const goal = activity.goalMin * MIN;
   const today = startOfDay(now);
   const from = addDays(today, -365);
@@ -499,22 +510,29 @@ export function goalStreak(entries, activity, now) {
   const hit = (d) => (map.get(d) || 0) >= goal;
 
   let current = 0;
-  let d = hit(today) ? today : addDays(today, -1);
-  while (d >= from && hit(d)) {
-    current++;
-    d = addDays(d, -1);
+  for (let d = today; d >= from; d = addDays(d, -1)) {
+    if (hit(d)) current++;
+    else if (d === today || !isGoalDay(activity, d)) continue;
+    else break;
   }
 
   let best = 0;
   let run = 0;
   for (let day = from; day <= today; day = addDays(day, 1)) {
-    run = hit(day) ? run + 1 : 0;
+    if (hit(day)) run++;
+    else if (day !== today && isGoalDay(activity, day)) run = 0;
     best = Math.max(best, run);
   }
 
   let hitDaysThisWeek = 0;
-  for (let day = startOfWeek(now); day <= today; day = addDays(day, 1)) if (hit(day)) hitDaysThisWeek++;
-  return { current, best, hitDaysThisWeek };
+  let goalDaysThisWeek = 0;
+  const week = startOfWeek(now);
+  for (let k = 0; k < 7; k++) {
+    const day = addDays(week, k);
+    if (isGoalDay(activity, day)) goalDaysThisWeek++;
+    if (day <= today && hit(day)) hitDaysThisWeek++;
+  }
+  return { current, best, hitDaysThisWeek, goalDaysThisWeek };
 }
 
 /** How much of today's waking window (settings.dayStart..dayEnd) has been tracked so far. */
@@ -580,6 +598,52 @@ export function buildInsights({ state, now }) {
 /* ----------------------------------------------------- import / migration */
 
 /** Validate and normalise a state loaded from storage or a backup file. Returns null if unusable. */
+/* ------------------------------------------------- forgotten timers, overlaps */
+
+/** A running timer this long (or past the end of its day) probably means "I forgot to stop". */
+export const STALE_RUNNING_MS = 6 * HOUR;
+/** A timer left paused this long probably means the session ended when it was paused. */
+export const STALE_PAUSED_MS = 3 * HOUR;
+
+/**
+ * Is the active timer probably forgotten? Returns null, or { kind, endAt }, where endAt is a sensible
+ * moment to stop it at (when it was paused, or the end of your waking day), or null if there is none.
+ */
+export function staleTimer(state, now) {
+  const a = state.active;
+  if (!a) return null;
+  if (a.pausedAt) return now - a.pausedAt > STALE_PAUSED_MS ? { kind: 'paused', endAt: a.pausedAt } : null;
+  const dayEnd = atMinutes(startOfDay(a.start), state.settings.dayEnd);
+  const startedInDay = a.start < dayEnd;
+  const pastDay = startedInDay && now > dayEnd + HOUR;
+  const tooLong = now - a.start > STALE_RUNNING_MS;
+  if (!pastDay && !tooLong) return null;
+  return { kind: 'running', endAt: startedInDay && dayEnd < now && dayEnd - a.start >= MIN_ENTRY_MS ? dayEnd : null };
+}
+
+/** The first saved entry (or the running timer) that overlaps [start, end) by a minute or more. */
+export function findOverlap(state, start, end, ignoreId, now) {
+  return allEntries(state, now).find((e) => e.id !== ignoreId && Math.min(e.end, end) - Math.max(e.start, start) >= MIN) || null;
+}
+
+/**
+ * Compare a period with the one before it. While the period is still running, the previous one is cut at
+ * the same point so "this week so far" is compared with "last week at the same point".
+ * period: 'day' | 'week' | 'month' | 'year'.
+ */
+export function periodComparison(entries, period, from, now) {
+  const prevFrom = shiftAnchor(period, from, -1);
+  const prev = periodRange(period, prevFrom);
+  const cur = periodRange(period, from);
+  const live = from <= now && now < cur.to;
+  const span = live ? now - cur.from : cur.to - cur.from;
+  const prevTo = Math.min(prev.to, prev.from + span);
+  const sum = (a, b) => entries.reduce((s, e) => s + overlapMs(e, a, b), 0);
+  const curTotal = sum(cur.from, live ? now : cur.to);
+  const prevTotal = sum(prev.from, prevTo);
+  return { diff: curTotal - prevTotal, prevTotal, curTotal, live, prevFrom: prev.from, prevTo: prev.to };
+}
+
 export function normalizeState(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const base = defaultState();
@@ -596,6 +660,8 @@ export function normalizeState(raw) {
           color: str(a.color, PALETTE[0]),
           group: typeof a.group === 'string' ? a.group : '',
           goalMin: Math.max(0, num(a.goalMin, 0)),
+          // weekdays (0 = Monday) the goal applies to; empty = every day
+          goalDays: Array.isArray(a.goalDays) ? [...new Set(a.goalDays.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))] : [],
           archived: a.archived === true,
         }))
     : base.activities;
@@ -645,5 +711,6 @@ export function normalizeState(raw) {
   };
   if (settings.dayEnd <= settings.dayStart) Object.assign(settings, base.settings);
 
-  return { v: 1, activities, entries, plan, active, settings };
+  const lastBackupAt = Number.isFinite(raw.lastBackupAt) && raw.lastBackupAt > 0 ? raw.lastBackupAt : 0;
+  return { v: 2, lastBackupAt, activities, entries, plan, active, settings };
 }

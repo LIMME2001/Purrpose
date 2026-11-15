@@ -1,6 +1,6 @@
 import * as c from './core.js';
 import * as store from './store.js';
-import { esc } from './util.js';
+import { esc, isNative } from './util.js';
 
 const EMOJIS = ['📚', '🧠', '💻', '🎌', '🗣️', '🚶', '🏃', '💪', '🧘', '🍳', '🛋️', '😴', '🎮', '💼', '🎧', '✍️'];
 
@@ -32,7 +32,7 @@ export function renderSheet(sheet, { state, now, ui }) {
       const a = state.activities.find((x) => x.id === sheet.id);
       const groups = [...new Set(state.activities.map((x) => x.group).filter(Boolean))];
       const color = a ? a.color : c.PALETTE[state.activities.length % c.PALETTE.length];
-      const n = a ? state.entries.filter((e) => e.activityId === a.id).length : 0;
+      const lost = a ? state.entries.filter((e) => e.activityId === a.id).reduce((s, e) => s + c.netMs(e), 0) : 0;
       const body = `
         <div class="field"><label for="f-name">Name</label><input id="f-name" type="text" name="name" maxlength="30" value="${esc(a?.name || '')}" placeholder="e.g. TSBK07 lectures" autocomplete="off" required></div>
         <div class="field"><label for="f-emoji">Emoji</label><input id="f-emoji" type="text" name="emoji" maxlength="8" value="${esc(a?.emoji || '🐾')}">
@@ -44,7 +44,7 @@ export function renderSheet(sheet, { state, now, ui }) {
         <div class="field"><label for="f-goal">Daily goal in minutes</label><input id="f-goal" type="number" name="goal" min="0" max="1440" step="5" inputmode="numeric" value="${a?.goalMin || 0}">
           <span class="hint">Hit it every day to build a streak. Use 0 for no goal.</span></div>`;
       const del = a
-        ? `<button class="btn btn-danger" type="button" data-action="delete-activity" data-id="${esc(a.id)}" data-confirm="${n ? `Tap again: deletes ${n} ${n === 1 ? 'entry' : 'entries'}` : 'Tap again to delete'}">Delete</button>`
+        ? `<button class="btn btn-danger" type="button" data-action="delete-activity" data-id="${esc(a.id)}" data-confirm="${lost ? `Tap again: erases ${c.fmtDur(lost)} of history` : 'Tap again to delete'}">Delete</button>`
         : '';
       const arch = a
         ? a.archived
@@ -52,7 +52,7 @@ export function renderSheet(sheet, { state, now, ui }) {
           : `<button class="btn" type="button" data-action="archive-activity" data-id="${esc(a.id)}">Archive</button>`
         : '';
       const archHint = a
-        ? `<p class="small muted" style="margin-top:4px">${a.archived ? 'Archived: hidden from Start and Plan, but all its stats are kept.' : 'Archive hides it from Start and Plan but keeps all its stats. Its plan blocks are removed.'}</p>`
+        ? `<p class="small muted" style="margin-top:4px">${a.archived ? 'Archived: hidden from Start and Plan, but all its stats are kept.' : `Archive hides it from Start and Plan but keeps all its stats. Delete erases ${lost ? c.fmtDur(lost) + ' of history' : 'it'} for good.`}</p>`
         : '';
       return wrap('activity', a ? 'Edit activity' : 'New activity', body + archHint, `${del}${arch}${cancel}${save()}`);
     }
@@ -106,7 +106,9 @@ export function renderSheet(sheet, { state, now, ui }) {
         <div class="field"><label for="f-act">Activity</label><select id="f-act" name="activity" ${a ? 'disabled' : ''}>${actOptions(a ? [a] : pool, sheet.id)}</select>
           ${a ? `<input type="hidden" name="activity" value="${esc(a.id)}">` : ''}</div>
         <div class="field"><label for="f-g">Daily goal in minutes</label><input id="f-g" type="number" name="goal" min="5" max="1440" step="5" inputmode="numeric" value="${a?.goalMin || 30}" required>
-          <span class="hint">Reach it every day to build a streak.</span></div>`;
+          <span class="hint">Reach it on your habit days to build a streak.</span></div>
+        <div class="field"><span class="lab">Habit days</span><div class="chips">${dayChips(a?.goalDays?.length ? a.goalDays : [0, 1, 2, 3, 4, 5, 6])}</div>
+          <span class="hint">Other days are rest days: they never break your streak.</span></div>`;
       const del = a ? `<button class="btn btn-danger" type="button" data-action="remove-habit" data-id="${esc(a.id)}" data-confirm="Tap again to remove">Remove habit</button>` : '';
       return wrap('habit', a ? 'Edit habit' : 'Add a habit', body, `${del}${cancel}${save()}`);
     }
@@ -122,8 +124,13 @@ export function renderSheet(sheet, { state, now, ui }) {
       const json = store.exportJson();
       const body = `<div class="field"><label for="f-j">Backup</label><textarea id="f-j" readonly>${esc(json)}</textarea>
         <span class="hint">${state.entries.length} entries, ${state.activities.length} activities, ${state.plan.length} plan blocks.</span></div>`;
-      const share = typeof navigator !== 'undefined' && navigator.share ? `<button class="btn" type="button" data-action="share-export">Share</button>` : '';
-      return wrap('export', 'Export backup', body, `${cancel}${share}<button class="btn btn-primary" type="button" data-action="copy-export">Copy</button><button class="btn btn-primary" type="button" data-action="download-export">Save file</button>`);
+      const native = isNative();
+      const canShare = native || (typeof navigator !== 'undefined' && navigator.share);
+      const hint = native ? '<p class="small muted" style="margin-bottom:12px">Share saves the backup as a file: send it to Drive, email it to yourself, or keep it in Files.</p>' : '';
+      const actions = native
+        ? `${cancel}<button class="btn" type="button" data-action="copy-export">Copy text</button><button class="btn btn-primary" type="button" data-action="share-export">Save or share file</button>`
+        : `${cancel}${canShare ? '<button class="btn" type="button" data-action="share-export">Share</button>' : ''}<button class="btn" type="button" data-action="copy-export">Copy</button><button class="btn btn-primary" type="button" data-action="download-export">Save file</button>`;
+      return wrap('export', 'Export backup', hint + body, actions);
     }
 
     case 'import': {
@@ -186,6 +193,13 @@ export function submitSheet(sheet, form, { state, now, ui }) {
       if (end <= start) end = c.addDays(end, 1);
       if (end > now + c.MIN) return { error: "That time hasn't happened yet. Pick an earlier end." };
       if (end - start < c.MIN) return { error: 'An entry must be at least one minute long.' };
+      const clash = c.findOverlap(state, start, end, sheet.id, now);
+      const sig = `${start}-${end}`;
+      if (clash && sheet.warned !== sig) {
+        sheet.warned = sig; // the second Save with the same times goes through
+        const who = state.activities.find((a) => a.id === clash.activityId)?.name || 'another entry';
+        return { error: `This overlaps ${who} ${c.fmtHM(clash.start)}–${c.fmtHM(clash.end)}, so that time would count twice. Save again to keep both, or change the times.` };
+      }
       store.update((s) => {
         const old = s.entries.find((x) => x.id === sheet.id);
         const pausedMs = old && old.pausedMs < end - start ? old.pausedMs : 0;
@@ -217,7 +231,10 @@ export function submitSheet(sheet, form, { state, now, ui }) {
       if (!(goal >= 5)) return { error: 'Pick a goal of at least 5 minutes.' };
       const id = val('activity');
       if (!id) return { error: 'Choose an activity.' };
-      store.update((s) => ({ ...s, activities: s.activities.map((a) => (a.id === id ? { ...a, goalMin: Math.min(goal, 1440) } : a)) }));
+      const days = fd.getAll('day').map(Number);
+      if (!days.length) return { error: 'Pick at least one habit day.' };
+      const goalDays = days.length === 7 ? [] : days;
+      store.update((s) => ({ ...s, activities: s.activities.map((a) => (a.id === id ? { ...a, goalMin: Math.min(goal, 1440), goalDays } : a)) }));
       return { close: true, toast: 'Habit saved.' };
     }
 
@@ -243,7 +260,7 @@ export function submitSheet(sheet, form, { state, now, ui }) {
       if (!text) return { error: 'Choose a backup file or paste its text.' };
       const res = store.importJson(text);
       if (!res.ok) return { error: res.error };
-      return { close: true, toast: `Imported ${res.entries} entries` };
+      return { close: true, toast: `Imported ${res.entries} entries.`, undo: true };
     }
 
     default:

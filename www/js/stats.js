@@ -84,6 +84,18 @@ export function statsView({ state, now, ui }) {
     )
     .join('');
 
+  /* ---- compared with the period before */
+  let compareLine = '';
+  if (navigable) {
+    const cmp = c.periodComparison(entries, ui.period, from, now);
+    if (cmp.curTotal || cmp.prevTotal) {
+      const named = { day: 'yesterday', week: 'last week', month: 'last month', year: 'last year' };
+      const worded = isCurrent ? named[ui.period] : c.periodLabel(ui.period, cmp.prevFrom, cmp.prevTo, now);
+      const d = Math.abs(cmp.diff) < c.MIN ? 'The same' : `${cmp.diff > 0 ? '+' : '−'}${c.fmtDur(Math.abs(cmp.diff))}`;
+      compareLine = `<p class="small muted compare">${d} vs ${esc(worded)}${cmp.live ? ' at this point' : ''}</p>`;
+    }
+  }
+
   /* ---- navigator */
   let navRow;
   if (navigable) {
@@ -169,7 +181,7 @@ export function statsView({ state, now, ui }) {
           return `<div class="pvr" ${cv(a.color)}>
             <div class="head"><span>${esc(a.emoji)} ${esc(a.name)}</span><span>${s.current ? '🔥 ' + s.current + (s.current === 1 ? ' day' : ' days') : 'No streak'} · <button class="link" data-action="edit-habit" data-id="${esc(a.id)}">Edit</button></span></div>
             <div class="meter"><i style="width:${Math.min(100, (done / a.goalMin) * 100).toFixed(1)}%"></i></div>
-            <div class="nums">${Math.round(done)} of ${a.goalMin} min today · best streak ${s.best} · ${s.hitDaysThisWeek} ${s.hitDaysThisWeek === 1 ? 'day' : 'days'} this week</div></div>`;
+            <div class="nums">${Math.round(done)} of ${a.goalMin} min today · best streak ${s.best} · ${s.hitDaysThisWeek} of ${s.goalDaysThisWeek} days this week</div></div>`;
         })
         .join('')
     : `<div class="empty"><b>No habits yet</b>A habit is a daily minimum for an activity, for example 30 minutes of Japanese. Reach it every day to build a streak.</div>`;
@@ -189,6 +201,7 @@ export function statsView({ state, now, ui }) {
         : `<div class="empty" style="margin-top:10px"><b>Nothing tracked here</b>Start an activity on the Now tab, or pick another timespan.</div>`
     }
     ${ui.period !== 'day' && total ? `<p class="small muted" style="text-align:center;margin-top:4px">${c.fmtDur(total / dayCount)} per day on average</p>` : ''}
+    ${compareLine}
     <div class="legend">${legend}</div>
   </section>
   ${chart}
