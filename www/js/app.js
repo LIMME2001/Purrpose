@@ -73,9 +73,12 @@ function offerUndo(message) {
 
 /* ---------------------------------------------------------------- actions */
 
-/** Native Capacitor plugins, used without a bundler: the Android side registers them by name. */
-const plugins = {};
-const plugin = (name) => (plugins[name] ??= window.Capacitor.registerPlugin(name));
+/**
+ * Native Capacitor plugins without a bundler. The page only gets the Android bridge (window.Capacitor with
+ * nativePromise / addListener), not Capacitor's JavaScript library, so there is no registerPlugin here.
+ */
+const native = (plugin, method, options = {}) => window.Capacitor.nativePromise(plugin, method, options);
+const errText = (err) => String(err?.message || err?.errorMessage || (typeof err === 'string' ? err : JSON.stringify(err)) || 'unknown error').slice(0, 120);
 
 const actions = {
   tab: (el) => go(el.dataset.v),
@@ -285,20 +288,32 @@ const actions = {
   'share-export': async () => {
     const text = store.exportJson();
     if (isNative()) {
-      // write a real .json file to the app cache and hand it to Android's share sheet (Drive, email, Files...)
+      // 1) write a real .json file to the app cache and hand it to Android's share sheet (Drive, email, Files...)
+      let step = 'making the file';
       try {
         const name = `purrpose-backup-${c.fmtDateInput(Date.now())}.json`;
-        const { uri } = await plugin('Filesystem').writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
-        await plugin('Share').share({ title: 'Purrpose backup', dialogTitle: 'Save your backup', files: [uri] });
+        const { uri } = await native('Filesystem', 'writeFile', { path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
+        step = 'sharing the file';
+        await native('Share', 'share', { title: 'Purrpose backup', dialogTitle: 'Save your backup', files: [uri] });
         store.markBackedUp();
         toast('Backup shared. Keep that file somewhere safe.', 4000);
+        return;
       } catch (err) {
-        if (!/cancel/i.test(String(err?.message || err))) {
+        if (/cancel/i.test(errText(err))) return; // the person closed the share sheet
+        // 2) fall back to sharing the text itself (works for notes, mail, chat)
+        try {
+          await native('Share', 'share', { title: 'Purrpose backup', dialogTitle: 'Save your backup', text });
+          store.markBackedUp();
+          toast(`Couldn't make a file (${errText(err)}), so the backup was shared as text.`, 6000);
+          return;
+        } catch (err2) {
+          if (/cancel/i.test(errText(err2))) return;
+          // 3) last resort: the clipboard
           await actions['copy-export']();
-          toast("Couldn't make a file, so the backup text was copied instead.", 4500);
+          toast(`Problem ${step}: ${errText(err)}. The backup text was copied instead.`, 8000);
+          return;
         }
       }
-      return;
     }
     try {
       await navigator.share({ title: 'Purrpose backup', text });
@@ -390,10 +405,10 @@ document.addEventListener('submit', (e) => {
 // Android's Back button: close a sheet first, then go back to Now, and only then leave the app.
 if (isNative()) {
   try {
-    plugin('App').addListener('backButton', () => {
+    window.Capacitor.addListener('App', 'backButton', () => {
       if (ui.sheet) closeSheet();
       else if (ui.tab !== 'now') go('now');
-      else plugin('App').minimizeApp();
+      else native('App', 'minimizeApp').catch(() => {});
     });
   } catch {
     /* without the listener Android just closes the app, as before */

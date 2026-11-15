@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 (15 Nov 2026)
+- Fix: "Save or share file" and the Android Back button did nothing in the installed app, because the page called a
+  Capacitor function that only exists with Capacitor's JavaScript library (this app does not load it). They now use the
+  Android bridge directly.
+- If making the backup file fails, the backup is shared as text instead, and the message says what went wrong.
+
 ## 1.1.0 (15 Nov 2026)
 - Every build is signed with one permanent key, so updates install over the old app and keep your data.
   Moving from an older build needs one uninstall: export a backup first.

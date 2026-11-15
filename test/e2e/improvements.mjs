@@ -49,23 +49,23 @@ async function open({ native = false, active = true } = {}) {
       };
       localStorage.setItem('purrpose.v1', JSON.stringify(state));
       if (native) {
+        // Mirrors the REAL Android bridge: isNativePlatform, nativePromise and addListener only.
+        // (There is no registerPlugin: that lives in Capacitor's JS library, which this app does not load.)
         window.__calls = [];
         window.__handlers = {};
-        const rec = (plugin, method, ret) => (args) => {
-          window.__calls.push({ plugin, method, args });
-          return Promise.resolve(ret);
-        };
+        const results = { Filesystem: { writeFile: { uri: 'file:///cache/backup.json' } } };
+        window.__failShare = false;
         window.Capacitor = {
           isNativePlatform: () => true,
-          registerPlugin: (name) => ({
-            writeFile: rec(name, 'writeFile', { uri: 'file:///cache/backup.json' }),
-            share: rec(name, 'share', {}),
-            minimizeApp: rec(name, 'minimizeApp'),
-            addListener: (ev, cb) => {
-              window.__handlers[ev] = cb;
-              return Promise.resolve({ remove() {} });
-            },
-          }),
+          nativePromise: (plugin, method, args) => {
+            window.__calls.push({ plugin, method, args });
+            if (plugin === 'Share' && window.__failShare && args.files) return Promise.reject({ message: 'FileProvider exploded' });
+            return Promise.resolve(results[plugin]?.[method] ?? {});
+          },
+          addListener: (plugin, ev, cb) => {
+            window.__handlers[ev] = cb;
+            return { remove: async () => {} };
+          },
         };
       }
     },
@@ -199,7 +199,7 @@ const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('pu
   await back();
   check('Back from Settings goes to Now', await page.isVisible('.hero'));
   await back();
-  check('Back on Now minimizes the app', await page.evaluate(() => window.__calls.some((c) => c.method === 'minimizeApp')));
+  check('Back on Now minimizes the app', await page.evaluate(() => window.__calls.some((c) => c.plugin === 'App' && c.method === 'minimizeApp')));
 
   await page.click('[data-action=settings]');
   await page.click('[data-action=export]');
@@ -208,9 +208,18 @@ const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('pu
   const calls = await page.evaluate(() => window.__calls);
   const w = calls.find((c) => c.method === 'writeFile');
   const sh = calls.find((c) => c.method === 'share');
-  check('Native: backup is written as a .json file in the cache', !!w && /^purrpose-backup-\d{4}-\d{2}-\d{2}\.json$/.test(w.args.path) && w.args.directory === 'CACHE' && JSON.parse(w.args.data).app === 'purrpose');
-  check('Native: the file is handed to the share sheet', !!sh && sh.args.files?.[0] === 'file:///cache/backup.json');
+  check('Native: backup is written as a .json file in the cache', !!w && w.plugin === 'Filesystem' && /^purrpose-backup-\d{4}-\d{2}-\d{2}\.json$/.test(w.args.path) && w.args.directory === 'CACHE' && JSON.parse(w.args.data).app === 'purrpose');
+  check('Native: the file is handed to the share sheet', !!sh && sh.plugin === 'Share' && sh.args.files?.[0] === 'file:///cache/backup.json');
   check('Native: backup time is remembered', (await stored(page)).lastBackupAt > Date.now() - 10000);
+
+  // if making/sharing the file fails, the text is shared instead and the reason is shown
+  await page.evaluate(() => { window.__failShare = true; window.__calls.length = 0; });
+  await page.click('[data-action=share-export]');
+  await page.waitForTimeout(250);
+  const calls2 = await page.evaluate(() => window.__calls.filter((c) => c.plugin === 'Share'));
+  const toastTxt = await page.textContent('#toast');
+  check('Native: a failed file share falls back to sharing the text', calls2.length === 2 && !!calls2[1].args.text && !calls2[1].args.files, JSON.stringify(calls2.map((c) => Object.keys(c.args))));
+  check('Native: the toast says what went wrong', /FileProvider exploded/.test(toastTxt), toastTxt.slice(0, 100));
   await ctx.close();
 }
 
