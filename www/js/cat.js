@@ -3,7 +3,7 @@
 //   awake  – tracking (the iris takes the activity's color, pupils are slits)
 //   paused – half-lidded
 //   happy  – every habit due today is done (eyes curved into smiles, rosy cheeks)
-// Extras: 'bonus round' (wide eyes, a Cheshire grin, a slowly turning burst and sparkles) while you work on a habit
+// Extras: 'bonus round' (the same face with wider eyes, a slowly turning burst and sparkles) while you work on a habit
 // you already met today, and a moon at night.
 
 const HEAD_FILL = '#1f2230';
@@ -29,10 +29,6 @@ function eye(cx, cy, rot, color, id, fill, ink) {
       <path d="M -40 -34 L 40 -34 L 40 1 Q 0 11 -40 1 Z" fill="${fill}" clip-path="url(#${id})"/>
       <path d="M -33 0 Q 0 10 33 0" stroke="${ink}" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".55"/>
     </g>
-    <g class="eye-wide">
-      <circle r="29" fill="${color}"/>
-      <g class="wide-pupil"><circle r="19" fill="#0a0a0f"/><circle cx="-6" cy="-8" r="5.5" fill="#fff" opacity=".95"/><circle cx="7" cy="7" r="2.6" fill="#fff" opacity=".7"/></g>
-    </g>
     <path class="eye-sleep" d="M -27 -1 Q 0 15 27 -1" stroke="${ink}" stroke-width="4.4" stroke-linecap="round" fill="none"/>
     <path class="eye-happy" d="M -27 6 Q 0 -22 27 6" stroke="${ink}" stroke-width="5" stroke-linecap="round" fill="none"/>
   </g>`;
@@ -55,7 +51,7 @@ function burstRays(color) {
 
 /** mode: 'sleep' | 'awake' | 'paused' | 'happy'; color: iris colour while awake; glow: bonus round; night: moon. */
 export function catHead({ mode = 'sleep', color = '#ffc247', glow = false, night = false } = {}) {
-  const desc = { sleep: 'asleep', paused: 'resting', happy: 'purring happily', awake: glow ? 'grinning, in a bonus round' : 'watching you work' }[mode] || 'asleep';
+  const desc = { sleep: 'asleep', paused: 'resting', happy: 'purring happily', awake: glow ? 'wide-eyed, in a bonus round' : 'watching you work' }[mode] || 'asleep';
   return `
 <svg class="cat ${glow ? 'has-glow' : ''}" data-mode="${mode}" viewBox="0 0 320 196" role="img" aria-label="Purrpose cat, ${desc}">
   ${glow ? burstRays(color) : ''}
@@ -67,7 +63,6 @@ export function catHead({ mode = 'sleep', color = '#ffc247', glow = false, night
   <g class="cheeks" fill="${PINK}" opacity=".38"><ellipse cx="82" cy="134" rx="17" ry="9"/><ellipse cx="238" cy="134" rx="17" ry="9"/></g>
   <path d="M 150 133 L 170 133 L 160 145 Z" fill="${PINK}" opacity=".85" stroke="${PINK}" stroke-width="3" stroke-linejoin="round"/>
   <path class="mouth" d="M 160 146 L 160 153 M 160 153 Q 151 163 142 156 M 160 153 Q 169 163 178 156" stroke="${MUTED}" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".7"/>
-  <g class="grin"><path d="M 112 150 Q 160 200 208 150 Q 160 166 112 150 Z" fill="#0a0a0f" stroke="${MUTED}" stroke-width="2" stroke-linejoin="round" opacity=".95"/><path d="M 126 156 L 132 171 L 139 160 Z M 194 156 L 188 171 L 181 160 Z" fill="#fff" opacity=".9"/></g>
   <g class="whisk" stroke="${MUTED}" stroke-width="2" stroke-linecap="round" opacity=".5">
     <path d="M 84 136 L 12 124"/><path d="M 82 148 L 8 150"/><path d="M 86 160 L 22 176"/>
     <path d="M 236 136 L 308 124"/><path d="M 238 148 L 312 150"/><path d="M 234 160 L 298 176"/>

@@ -463,23 +463,6 @@ test('the version is the same in package.json and the app (Android reads package
 /* ---------------------------------------------- cat, history, reports */
 const e2 = (activityId, day, hm, min) => ({ id: `${activityId}${day.join('')}${hm}`, activityId, start: t(day, hm), end: t(day, hm) + min * 60000, pausedMs: 0 });
 
-test('habitHistory marks hit, miss, rest, pending, future and none', () => {
-  const act = { id: 'japanese', goalMin: 30, goalDays: [0, 1, 2, 3, 4] };
-  const now = t([2026, 11, 11], '12:00'); // Wednesday
-  const entries = [e2('japanese', [2026, 11, 2], '08:00', 40), e2('japanese', [2026, 11, 3], '08:00', 10)];
-  const h = c.habitHistory(entries, act, now, 2);
-  assert.equal(h.cols.length, 2);
-  assert.equal(h.cols[0].length, 7);
-  const w = h.cols[1]; // Mon 9th .. Sun 15th
-  assert.equal(h.cols[0][0].state, 'hit'); // Mon 2nd
-  assert.equal(h.cols[0][1].state, 'miss'); // Tue 3rd, only 10 min
-  assert.equal(h.cols[0][5].state, 'rest'); // Saturday
-  assert.equal(w[0].state, 'miss'); // Mon 9th
-  assert.equal(w[2].state, 'pending'); // today
-  assert.equal(w[3].state, 'future');
-  assert.equal(h.hits, 1);
-});
-
 test('reportDue: Sunday evening and Monday morning only', () => {
   assert.equal(c.reportDue(t(SUN, '16:59')), null);
   assert.equal(c.reportDue(t(SUN, '17:00')), t(MON));

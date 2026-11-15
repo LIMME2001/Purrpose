@@ -1,11 +1,10 @@
 # Changelog
 
 ## 1.2.0 (15 Nov 2026)
-- Paw-print history: in Stats, tap "Paw history" under a habit to open 12 weeks of paws (one per day you hit the goal).
 - Week in review: time, best day, where it went and habits. Offered on Now from Sunday 17:00 until Monday noon, and
   always available in Stats.
-- The cat reacts: smiles when every habit due today is done, goes into a "bonus round" (wide eyes, a grin, a slowly
-  turning burst and sparkles) while you track a habit you already met, and wears a moon outside your waking day.
+- The cat reacts: smiles when every habit due today is done, goes into a "bonus round" (wider eyes, a slowly turning
+  burst and sparkles) while you track a habit you already met, and wears a moon outside your waking day.
 - Milestone cards at 10, 25, 50, 100 hours, then every 50 to 500, every 100 to 1000 and so on (not retroactive).
 
 ## 1.1.1 (15 Nov 2026)

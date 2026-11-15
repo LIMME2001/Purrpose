@@ -600,42 +600,6 @@ export function buildInsights({ state, now }) {
 /** Validate and normalise a state loaded from storage or a backup file. Returns null if unusable. */
 /* ------------------------------------------------------ the cat, history, reports */
 
-/**
- * The last `weeks` weeks of one habit as a grid of columns (weeks, oldest first) of 7 days (Monday first).
- * Day states: hit | miss | rest (not a habit day) | pending (today, not done yet) | future | none (before you started tracking).
- */
-export function habitHistory(entries, activity, now, weeks = 12) {
-  const today = startOfDay(now);
-  const first = addDays(startOfWeek(now), -(weeks - 1) * 7);
-  const since = entries.reduce((m, e) => Math.min(m, startOfDay(e.start)), Infinity);
-  const goal = (activity.goalMin || 0) * MIN;
-  const map = bucketByDay(entries, first, addDays(first, weeks * 7), (e) => e.activityId === activity.id);
-  let hits = 0;
-  let misses = 0;
-  const cols = [];
-  for (let w = 0; w < weeks; w++) {
-    const col = [];
-    for (let k = 0; k < 7; k++) {
-      const day = addDays(first, w * 7 + k);
-      let state;
-      if (day > today) state = 'future';
-      else if (day < since) state = 'none';
-      else if (goal > 0 && (map.get(day) || 0) >= goal) {
-        state = 'hit';
-        hits++;
-      } else if (!isGoalDay(activity, day)) state = 'rest';
-      else if (day === today) state = 'pending';
-      else {
-        state = 'miss';
-        misses++;
-      }
-      col.push({ day, state });
-    }
-    cols.push(col);
-  }
-  return { cols, hits, misses };
-}
-
 /** Which week's report should be offered right now (its Monday), or null: Sunday from 17:00, and Monday until noon. */
 export function reportDue(now) {
   const d = new Date(now);
