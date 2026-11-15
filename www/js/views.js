@@ -1,3 +1,4 @@
+import { VERSION } from './version.js';
 import * as c from './core.js';
 import { esc, icon } from './util.js';
 import { catHead, logoMark } from './cat.js';
@@ -338,5 +339,5 @@ export function settingsView({ state, now }) {
     <div class="two"><button class="btn" data-action="export">Export backup</button><button class="btn" data-action="import">Import backup</button></div>
     <button class="btn btn-danger btn-block" style="margin-top:12px" data-action="erase" data-confirm="Tap again to erase everything">Erase all data</button>
   </section>
-  <p class="small faint" style="text-align:center;padding:4px 0 8px">Purrpose 0.1.0</p>`;
+  <p class="small faint" style="text-align:center;padding:4px 0 8px">Purrpose ${VERSION}</p>`;
 }

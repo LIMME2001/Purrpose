@@ -1,6 +1,6 @@
 {
   "name": "purrpose",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "Purrpose: a sleek, cat-themed time tracker. Plan your day, track what you actually do, and see your living reality.",
   "private": true,
   "type": "module",

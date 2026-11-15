@@ -58,6 +58,7 @@ jobs:
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk purrpose.apk
           SHORT=${GITHUB_SHA::7}
+          VERSION=$(node -p "require('./package.json').version")
           if [ "$GITHUB_REF_NAME" = "main" ]; then
             mkdir prev
             if gh release download latest -p purrpose.apk -D prev 2>/dev/null; then
@@ -68,11 +69,11 @@ jobs:
             fi
             gh release delete latest --cleanup-tag --yes || true
             gh release create latest purrpose.apk --target "$GITHUB_SHA" --prerelease \
-              --title "Purrpose (latest build)" \
-              --notes "Debug APK built from main, commit $SHORT. Download purrpose.apk, open it and allow installing from this source."
+              --title "Purrpose $VERSION (latest build)" \
+              --notes "Version $VERSION, debug APK built from main, commit $SHORT. Download purrpose.apk, open it and allow installing from this source."
           else
             gh release delete preview --cleanup-tag --yes || true
             gh release create preview purrpose.apk --target "$GITHUB_SHA" --prerelease \
-              --title "Preview: $GITHUB_REF_NAME" \
+              --title "Preview $VERSION: $GITHUB_REF_NAME" \
               --notes "Test build of branch $GITHUB_REF_NAME, commit $SHORT. Not merged yet. Your normal version is the 'latest' release."
           fi

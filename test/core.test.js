@@ -450,3 +450,12 @@ test('state keeps goalDays and lastBackupAt, and old v1 data still loads', () =>
   assert.equal(n2.lastBackupAt, 123456);
   assert.deepEqual(n2.activities[0].goalDays, [0, 3]);
 });
+
+test('the version is the same in package.json and the app (Android reads package.json directly)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const { VERSION } = await import('../www/js/version.js');
+  assert.equal(VERSION, pkg.version);
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
+  assert.match(readFileSync(new URL('../android/app/build.gradle', import.meta.url), 'utf8'), /pkgVersion[^\n]*package\.json[\s\S]*versionName pkgVersion/);
+});
